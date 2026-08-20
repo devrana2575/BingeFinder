@@ -58,10 +58,20 @@ DEFAULTS = {
     "discover_query": "",
     "tvmaze_candidates": None,
     "tvmaze_candidates_query": None,
+    "is_authenticated": False,
+    "current_user": None,
 }
 for key, value in DEFAULTS.items():
     if key not in st.session_state:
         st.session_state[key] = value
+
+
+def _current_user_id() -> Optional[str]:
+    """Return the current user's ID, or None if not logged in."""
+    user = st.session_state.get("current_user")
+    if user and isinstance(user, dict):
+        return user.get("user_id")
+    return None
 
 
 def go_home() -> None:
@@ -110,7 +120,34 @@ def go_surprise() -> None:
 
 
 def go_watchlist() -> None:
+    if not st.session_state.get("is_authenticated"):
+        go_login()
+        return
     st.session_state.page = "watchlist"
+    st.rerun()
+
+
+def go_liked() -> None:
+    if not st.session_state.get("is_authenticated"):
+        go_login()
+        return
+    st.session_state.page = "liked"
+    st.rerun()
+
+
+def go_recently_viewed() -> None:
+    if not st.session_state.get("is_authenticated"):
+        go_login()
+        return
+    st.session_state.page = "recently_viewed"
+    st.rerun()
+
+
+def go_personal_recommendations() -> None:
+    if not st.session_state.get("is_authenticated"):
+        go_login()
+        return
+    st.session_state.page = "personal_recommendations"
     st.rerun()
 
 
@@ -119,86 +156,77 @@ def go_analytics() -> None:
     st.rerun()
 
 
-# ---------------------------------------------------------------------------
-# Watchlist helpers
-# ---------------------------------------------------------------------------
+def go_login() -> None:
+    st.session_state.page = "login"
+    st.rerun()
 
-def _get_watchlist_manager():
-    """Return a WatchlistManager (or None with an error message)."""
-    try:
-        from database.mongo_client import MongoDatabaseError, MongoDBManager
-        from database.watchlist import WatchlistManager
-        manager = MongoDBManager()
-        return WatchlistManager(manager), None, manager
-    except Exception as exc:
-        return None, f"Watchlist unavailable: {exc}", None
 
+def go_signup() -> None:
+    st.session_state.page = "signup"
+    st.rerun()
+
+
+def do_login(user_data: dict) -> None:
+    """Set session state for a logged-in user."""
+    st.session_state.is_authenticated = True
+    st.session_state.current_user = user_data
+
+
+def do_logout() -> None:
+    """Clear session state for logout."""
+    st.session_state.is_authenticated = False
+    st.session_state.current_user = None
+    st.session_state.page = "home"
+    st.rerun()
+
+
+# ---------------------------------------------------------------------------
+# Watchlist helpers (user-specific)
+# ---------------------------------------------------------------------------
 
 def _is_in_watchlist(tvmaze_id: int) -> bool:
-    """Check if a series is in the watchlist (never crashes)."""
+    """Check if a series is in the current user's watchlist."""
+    user_id = _current_user_id()
+    if not user_id:
+        return False
     try:
-        wl, err, mgr = _get_watchlist_manager()
-        if err or wl is None:
-            return False
-        return wl.is_in_watchlist(tvmaze_id)
+        return da.is_in_watchlist(user_id, tvmaze_id)
     except Exception:
         return False
-    finally:
-        try:
-            mgr.close()
-        except Exception:
-            pass
 
 
 def save_to_watchlist(tvmaze_id: int) -> str:
-    """Add a series to the watchlist. Returns 'added', 'already_exists', or error msg."""
-    try:
-        wl, err, mgr = _get_watchlist_manager()
-        if err:
-            return err
-        result = wl.add_to_watchlist(tvmaze_id)
-        return result
-    except Exception as exc:
-        return f"Error: {exc}"
-    finally:
-        try:
-            mgr.close()
-        except Exception:
-            pass
+    """Add a series to the current user's watchlist."""
+    user_id = _current_user_id()
+    if not user_id:
+        return "Please log in to use the watchlist."
+    ok, err = da.add_to_watchlist(user_id, tvmaze_id)
+    if err:
+        return f"Error: {err}"
+    return "added" if ok else "already_exists"
 
 
 def remove_from_watchlist(tvmaze_id: int) -> str:
-    """Remove a series from the watchlist. Returns 'removed', 'not_found', or error msg."""
-    try:
-        wl, err, mgr = _get_watchlist_manager()
-        if err:
-            return err
-        result = wl.remove_from_watchlist(tvmaze_id)
-        return result
-    except Exception as exc:
-        return f"Error: {exc}"
-    finally:
-        try:
-            mgr.close()
-        except Exception:
-            pass
+    """Remove a series from the current user's watchlist."""
+    user_id = _current_user_id()
+    if not user_id:
+        return "Please log in to use the watchlist."
+    ok, err = da.remove_from_watchlist(user_id, tvmaze_id)
+    if err:
+        return f"Error: {err}"
+    return "removed" if ok else "not_found"
 
 
 def _get_watchlist_ids() -> list:
-    """Return list of tvmaze_ids in the watchlist."""
+    """Return list of tvmaze_ids in the current user's watchlist."""
+    user_id = _current_user_id()
+    if not user_id:
+        return []
     try:
-        wl, err, mgr = _get_watchlist_manager()
-        if err or wl is None:
-            return []
-        items = wl.get_watchlist()
-        return [item.get("tvmaze_id") for item in items if item.get("tvmaze_id") is not None]
+        docs, _ = da.get_watchlist_series(user_id)
+        return [d.get("tvmaze_id") for d in docs if d.get("tvmaze_id") is not None]
     except Exception:
         return []
-    finally:
-        try:
-            mgr.close()
-        except Exception:
-            pass
 
 
 # ---------------------------------------------------------------------------
@@ -206,11 +234,13 @@ def _get_watchlist_ids() -> list:
 # ---------------------------------------------------------------------------
 
 @st.cache_data(ttl=600, show_spinner="Looking up watch providers...")
-def _cached_watch_providers(tvmaze_id: int, imdb_id: Optional[str]) -> dict:
+def _cached_watch_providers(tvmaze_id: int, imdb_id: Optional[str], series_name: str, premiered: Optional[str]) -> dict:
     """Cached wrapper around get_watch_providers_for_series."""
     try:
         from api.watch_providers import get_watch_providers_for_series
-        return get_watch_providers_for_series(tvmaze_id, imdb_id=imdb_id)
+        return get_watch_providers_for_series(
+            tvmaze_id, imdb_id=imdb_id, series_name=series_name, premiered=premiered
+        )
     except Exception:
         return {}
 
@@ -223,8 +253,9 @@ def _render_watch_providers(doc: dict) -> None:
     series_name = doc.get("name") or ""
     tvmaze_id = doc.get("tvmaze_id")
     imdb_id = doc.get("imdb_id")
+    premiered = doc.get("premiered")
 
-    providers_data = _cached_watch_providers(tvmaze_id, imdb_id)
+    providers_data = _cached_watch_providers(tvmaze_id, imdb_id, series_name, premiered)
 
     if not providers_data or not providers_data.get("providers"):
         justwatch_url = None
@@ -233,29 +264,30 @@ def _render_watch_providers(doc: dict) -> None:
             justwatch_url = get_provider_page_url(series_name)
         except Exception:
             pass
-        st.info("Watch availability unavailable for this series.")
+        st.info("No legal watch options found for this region.")
         if justwatch_url:
             st.markdown(f"🔗 [Check JustWatch for availability]({justwatch_url})")
         return
 
     providers = providers_data["providers"]
-    region = providers_data.get("region", "US")
+    region = providers_data.get("region", "IN")
     tmdb_link = providers_data.get("link", "")
 
     type_labels = {
         "flatrate": ("Stream", "🟢"),
+        "ads": ("Free with Ads", "📺"),
         "free": ("Free", "🆓"),
         "rent": ("Rent", "🏷️"),
         "buy": ("Buy", "🛒"),
     }
 
     has_any = False
-    for ptype, type_key in [("flatrate", "Stream"), ("free", "Free"), ("rent", "Rent"), ("buy", "Buy")]:
+    for ptype in ["flatrate", "ads", "free", "rent", "buy"]:
         items = providers.get(ptype) or []
         if not items:
             continue
         has_any = True
-        label, emoji = type_labels.get(ptype, (type_key, "📺"))
+        label, emoji = type_labels.get(ptype, (ptype, "📺"))
         st.markdown(f"**{emoji} {label}**")
         cols = st.columns(min(4, len(items)))
         for idx, provider in enumerate(items):
@@ -268,7 +300,7 @@ def _render_watch_providers(doc: dict) -> None:
                 st.caption(pname)
 
     if not has_any:
-        st.info("No streaming providers found for your region.")
+        st.info("No legal watch options found for this region.")
         justwatch_url = None
         try:
             from api.watch_providers import get_provider_page_url
@@ -305,8 +337,19 @@ def render_sidebar() -> None:
             go_surprise()
         if st.button("📊  Analytics", use_container_width=True, help="Catalog analytics & charts"):
             go_analytics()
-        if st.button("❤️  Watchlist", use_container_width=True, help="Your saved series"):
-            go_watchlist()
+
+        is_auth = st.session_state.get("is_authenticated", False)
+
+        if is_auth:
+            st.divider()
+            if st.button("❤️  My Watchlist", use_container_width=True, help="Your saved series"):
+                go_watchlist()
+            if st.button("👍  Liked", use_container_width=True, help="Series you've liked"):
+                go_liked()
+            if st.button("🕐  Recently Viewed", use_container_width=True, help="Series you've viewed recently"):
+                go_recently_viewed()
+            if st.button("🎯  For You", use_container_width=True, help="Personalized recommendations"):
+                go_personal_recommendations()
 
         st.divider()
         docs, err = da.load_all_series()
@@ -317,6 +360,21 @@ def render_sidebar() -> None:
         if st.button("↻ Refresh data", use_container_width=True, help="Re-read the latest data from MongoDB"):
             da.load_all_series.clear()
             st.rerun()
+
+        st.divider()
+        if is_auth:
+            user = st.session_state.get("current_user") or {}
+            st.caption(f"👤 {user.get('name', 'User')}")
+            if st.button("🚪  Logout", use_container_width=True):
+                do_logout()
+        else:
+            c1, c2 = st.columns(2)
+            with c1:
+                if st.button("Login", use_container_width=True):
+                    go_login()
+            with c2:
+                if st.button("Sign Up", use_container_width=True):
+                    go_signup()
 
 
 # ---------------------------------------------------------------------------
@@ -349,6 +407,21 @@ def render_home() -> None:
         return
 
     # -----------------------------------------------------------------
+    # PERSONALIZED RECOMMENDATIONS (logged-in users only)
+    # -----------------------------------------------------------------
+    user_id = _current_user_id()
+    if user_id:
+        section_header("🎯", "Recommended For You", "Personalized picks based on your activity")
+        recs, rec_err = da.fetch_personalized_recommendations(user_id, top_n=10)
+        if rec_err:
+            st.caption("Build the recommendation model for personalized picks.")
+        elif recs:
+            render_series_grid(recs, key_prefix="home_personal", on_open=go_details,
+                               similarity_scores={r["series_id"]: r["similarity_score"] for r in recs})
+        else:
+            st.caption("Like or save some series to get personalized recommendations!")
+
+    # -----------------------------------------------------------------
     # POPULAR / TRENDING
     # -----------------------------------------------------------------
     section_header("🔥", "Popular & Trending", "Currently airing and highly ranked, right now")
@@ -362,7 +435,7 @@ def render_home() -> None:
     # -----------------------------------------------------------------
     # RECOMMENDED
     # -----------------------------------------------------------------
-    section_header("🎯", "Recommended For You", "Top-rated picks from the catalog")
+    section_header("🎯", "Top Picks", "Top-rated picks from the catalog")
     recommended = da.get_featured_series(docs)
     if recommended:
         render_series_grid(recommended, key_prefix="home_rec", on_open=go_details)
@@ -598,28 +671,52 @@ def render_details() -> None:
         st.write("")
         st.write("")
 
+        is_auth = st.session_state.get("is_authenticated", False)
+
         # --- Action buttons row ---
-        btn_cols = st.columns([2, 2, 2])
+        if is_auth:
+            btn_cols = st.columns([2, 2, 2])
+        else:
+            btn_cols = st.columns([3])
+
         with btn_cols[0]:
             if st.button("🔗  Find Similar Series", type="primary", use_container_width=True):
                 go_recommendations(series_id)
 
-        with btn_cols[1]:
-            in_watchlist = _is_in_watchlist(series_id)
-            if in_watchlist:
-                if st.button("💔 Remove from Watchlist", use_container_width=True):
-                    result = remove_from_watchlist(series_id)
-                    if "Error" in str(result):
-                        st.error(result)
+        if is_auth:
+            with btn_cols[1]:
+                in_watchlist = _is_in_watchlist(series_id)
+                if in_watchlist:
+                    if st.button("💔 Remove from Watchlist", use_container_width=True):
+                        result = remove_from_watchlist(series_id)
+                        if "Error" in str(result):
+                            st.error(result)
+                        else:
+                            st.rerun()
+                else:
+                    if st.button("❤️  Save to Watchlist", use_container_width=True):
+                        result = save_to_watchlist(series_id)
+                        if "Error" in str(result):
+                            st.error(result)
+                        else:
+                            st.rerun()
+
+            with btn_cols[2]:
+                user_id = _current_user_id()
+                if user_id:
+                    liked = da.is_liked(user_id, series_id)
+                    if liked:
+                        if st.button("💔 Unlike", use_container_width=True):
+                            da.unlike_series(user_id, series_id)
+                            st.rerun()
                     else:
-                        st.rerun()
-            else:
-                if st.button("❤️  Save to Watchlist", use_container_width=True):
-                    result = save_to_watchlist(series_id)
-                    if "Error" in str(result):
-                        st.error(result)
-                    else:
-                        st.rerun()
+                        if st.button("👍  Like", use_container_width=True):
+                            da.like_series(user_id, series_id)
+                            st.rerun()
+
+        # --- Record view for logged-in users ---
+        if is_auth and _current_user_id():
+            da.record_view(_current_user_id(), series_id)
 
         # --- Where to Watch ---
         try:
@@ -698,27 +795,31 @@ def render_watchlist() -> None:
         unsafe_allow_html=True,
     )
 
+    user_id = _current_user_id()
+    if not user_id:
+        st.info("Please log in to view your watchlist.")
+        if st.button("Go to Login"):
+            go_login()
+        return
+
     try:
-        wl_ids = _get_watchlist_ids()
+        wl_docs, wl_err = da.get_watchlist_series(user_id)
     except Exception as exc:
         st.error(f"⚠️ Could not load watchlist: {exc}")
         return
 
-    if not wl_ids:
+    if wl_err:
+        st.error(f"⚠️ {wl_err}")
+        return
+
+    if not wl_docs:
         st.info("Your watchlist is empty. Open a series and hit ❤️ Save to Watchlist to start building it.")
         if st.button("Go to Discover"):
             go_discover()
         return
 
-    series_map = da.get_series_map()
-    docs = [series_map[tid] for tid in wl_ids if tid in series_map]
-
-    if not docs:
-        st.info("None of the watchlist series are in the current catalog. Try refreshing data.")
-        return
-
-    st.caption(f"{len(docs)} series in your watchlist")
-    render_series_grid(docs, key_prefix="wl", on_open=go_details, button_label="View Details")
+    st.caption(f"{len(wl_docs)} series in your watchlist")
+    render_series_grid(wl_docs, key_prefix="wl", on_open=go_details, button_label="View Details")
 
 
 # ---------------------------------------------------------------------------
@@ -943,6 +1044,246 @@ def render_analytics() -> None:
 
 
 # ---------------------------------------------------------------------------
+# LOGIN
+# ---------------------------------------------------------------------------
+
+def render_login() -> None:
+    st.markdown(
+        '<h1 style="font-family:Sora,sans-serif;font-weight:800;">🔑 Login</h1>'
+        '<p style="color:#9A9AAE;margin-top:-0.6rem;">Sign in to access your personalized features.</p>',
+        unsafe_allow_html=True,
+    )
+
+    if st.session_state.get("is_authenticated"):
+        st.info("You are already logged in.")
+        if st.button("Go to Home"):
+            go_home()
+        return
+
+    with st.form("login_form"):
+        email = st.text_input("Email", placeholder="your@email.com")
+        password = st.text_input("Password", type="password", placeholder="Your password")
+        submitted = st.form_submit_button("Login", use_container_width=True, type="primary")
+
+    if submitted:
+        if not email or not password:
+            st.warning("Please enter both email and password.")
+            return
+        try:
+            from config import get_bcrypt_rounds
+            from database.mongo_client import MongoDBManager
+            from database.users import UserManager
+
+            manager = MongoDBManager()
+            um = UserManager(manager, bcrypt_rounds=get_bcrypt_rounds())
+            user = um.authenticate_user(email, password)
+            manager.close()
+
+            if user:
+                do_login(user)
+                st.rerun()
+            else:
+                st.error("Invalid email or password.")
+        except Exception as exc:
+            st.error(f"Login failed: {exc}")
+
+    st.write("")
+    if st.button("Don't have an account? Sign Up"):
+        go_signup()
+
+
+# ---------------------------------------------------------------------------
+# SIGNUP
+# ---------------------------------------------------------------------------
+
+def render_signup() -> None:
+    st.markdown(
+        '<h1 style="font-family:Sora,sans-serif;font-weight:800;">📝 Sign Up</h1>'
+        '<p style="color:#9A9AAE;margin-top:-0.6rem;">Create an account to get personalized features.</p>',
+        unsafe_allow_html=True,
+    )
+
+    if st.session_state.get("is_authenticated"):
+        st.info("You are already logged in.")
+        if st.button("Go to Home"):
+            go_home()
+        return
+
+    with st.form("signup_form"):
+        name = st.text_input("Name", placeholder="Your name")
+        email = st.text_input("Email", placeholder="your@email.com")
+        password = st.text_input("Password", type="password", placeholder="Choose a password")
+        confirm = st.text_input("Confirm Password", type="password", placeholder="Repeat password")
+        submitted = st.form_submit_button("Sign Up", use_container_width=True, type="primary")
+
+    if submitted:
+        if not name or not email or not password:
+            st.warning("Please fill in all fields.")
+            return
+        if len(password) < 6:
+            st.warning("Password must be at least 6 characters.")
+            return
+        if password != confirm:
+            st.warning("Passwords do not match.")
+            return
+        if "@" not in email:
+            st.warning("Please enter a valid email address.")
+            return
+
+        try:
+            from config import get_bcrypt_rounds
+            from database.mongo_client import MongoDBManager
+            from database.users import UserManager
+
+            manager = MongoDBManager()
+            um = UserManager(manager, bcrypt_rounds=get_bcrypt_rounds())
+            result = um.create_user(name, email, password)
+            manager.close()
+
+            if result == "email_exists":
+                st.error("An account with this email already exists.")
+            elif result == "created":
+                st.success("Account created! Please log in.")
+                go_login()
+        except Exception as exc:
+            st.error(f"Signup failed: {exc}")
+
+    st.write("")
+    if st.button("Already have an account? Login"):
+        go_login()
+
+
+# ---------------------------------------------------------------------------
+# LIKED
+# ---------------------------------------------------------------------------
+
+def render_liked() -> None:
+    st.markdown(
+        '<h1 style="font-family:Sora,sans-serif;font-weight:800;">👍 Liked Series</h1>'
+        '<p style="color:#9A9AAE;margin-top:-0.6rem;">Series you&#39;ve liked.</p>',
+        unsafe_allow_html=True,
+    )
+
+    user_id = _current_user_id()
+    if not user_id:
+        st.info("Please log in to see your liked series.")
+        if st.button("Go to Login"):
+            go_login()
+        return
+
+    try:
+        liked_docs, liked_err = da.get_liked_series(user_id)
+    except Exception as exc:
+        st.error(f"⚠️ Could not load liked series: {exc}")
+        return
+
+    if liked_err:
+        st.error(f"⚠️ {liked_err}")
+        return
+
+    if not liked_docs:
+        st.info("You haven't liked any series yet. Open a series and hit 👍 Like to start building your collection.")
+        if st.button("Go to Discover"):
+            go_discover()
+        return
+
+    st.caption(f"{len(liked_docs)} liked series")
+    render_series_grid(liked_docs, key_prefix="liked", on_open=go_details, button_label="View Details")
+
+
+# ---------------------------------------------------------------------------
+# RECENTLY VIEWED
+# ---------------------------------------------------------------------------
+
+def render_recently_viewed() -> None:
+    st.markdown(
+        '<h1 style="font-family:Sora,sans-serif;font-weight:800;">🕐 Recently Viewed</h1>'
+        '<p style="color:#9A9AAE;margin-top:-0.6rem;">Series you&#39;ve looked at recently.</p>',
+        unsafe_allow_html=True,
+    )
+
+    user_id = _current_user_id()
+    if not user_id:
+        st.info("Please log in to see your recently viewed series.")
+        if st.button("Go to Login"):
+            go_login()
+        return
+
+    try:
+        recent_docs, recent_err = da.get_recently_viewed(user_id, limit=20)
+    except Exception as exc:
+        st.error(f"⚠️ Could not load recently viewed: {exc}")
+        return
+
+    if recent_err:
+        st.error(f"⚠️ {recent_err}")
+        return
+
+    if not recent_docs:
+        st.info("You haven't viewed any series yet. Start exploring!")
+        if st.button("Go to Discover"):
+            go_discover()
+        return
+
+    st.caption(f"Showing {len(recent_docs)} recently viewed series")
+    render_series_grid(recent_docs, key_prefix="rv", on_open=go_details, button_label="View Details")
+
+
+# ---------------------------------------------------------------------------
+# PERSONALIZED RECOMMENDATIONS
+# ---------------------------------------------------------------------------
+
+def render_personal_recommendations() -> None:
+    st.markdown(
+        '<h1 style="font-family:Sora,sans-serif;font-weight:800;">🎯 Recommended For You</h1>'
+        '<p style="color:#9A9AAE;margin-top:-0.6rem;">Based on your watchlist, likes, and recently viewed series.</p>',
+        unsafe_allow_html=True,
+    )
+
+    user_id = _current_user_id()
+    if not user_id:
+        st.info("Please log in to see personalized recommendations.")
+        if st.button("Go to Login"):
+            go_login()
+        return
+
+    recs, err = da.fetch_personalized_recommendations(user_id, top_n=12)
+
+    if err:
+        st.warning(f"⚠️ {err}")
+        return
+
+    if not recs:
+        st.info("Not enough activity to generate personalized recommendations yet. Like, watchlist, or view some series first!")
+        if st.button("Go to Discover"):
+            go_discover()
+        return
+
+    section_header("🎯", "Ranked by Content Similarity", "Matched using TF-IDF + cosine similarity on your preferences")
+
+    similarity_scores = {r["series_id"]: r["similarity_score"] for r in recs}
+
+    cards = [
+        {
+            "tvmaze_id": r["series_id"],
+            "name": r["title"],
+            "rating": r["rating"],
+            "genres": r["genres"],
+            "image_medium": r["image"],
+        }
+        for r in recs
+    ]
+
+    render_series_grid(
+        cards,
+        key_prefix="personal_rec",
+        on_open=go_details,
+        similarity_scores=similarity_scores,
+        button_label="Open",
+    )
+
+
+# ---------------------------------------------------------------------------
 # Router
 # ---------------------------------------------------------------------------
 
@@ -964,6 +1305,16 @@ def main() -> None:
         render_watchlist()
     elif page == "analytics":
         render_analytics()
+    elif page == "login":
+        render_login()
+    elif page == "signup":
+        render_signup()
+    elif page == "liked":
+        render_liked()
+    elif page == "recently_viewed":
+        render_recently_viewed()
+    elif page == "personal_recommendations":
+        render_personal_recommendations()
     else:
         go_home()
 

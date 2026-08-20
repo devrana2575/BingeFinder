@@ -4,11 +4,13 @@ api/watch_providers.py
 Streaming-availability look-ups built on top of the existing TMDb client.
 
 The main entry point is `get_watch_providers_for_series()` which:
-    1. Accepts a TVmaze ID and optional IMDB ID.
+    1. Accepts a TVmaze ID, optional IMDB ID, and optional series metadata.
     2. If an IMDB ID is available, uses TMDb's /find endpoint to resolve a
-       TMDb series ID.
-    3. Fetches watch-provider data from TMDb for the configured region.
-    4. Returns a structured dict ready for the caller to consume.
+       TMDb series ID (with title validation).
+    3. Falls back to a title+year search via TMDb's /search/tv when IMDB
+       resolution is not possible.
+    4. Fetches watch-provider data from TMDb for the configured region.
+    5. Returns a structured dict ready for the caller to consume.
 
 A helper `get_provider_page_url()` produces a JustWatch deep-link as a
 fallback when no structured data is available.
@@ -26,8 +28,7 @@ logger = get_logger(__name__)
 
 # ---------------------------------------------------------------------------
 # Module-level cache — keyed by TMDb series ID so the same series is only
-# fetched once per process lifetime.  Trade-off: tiny memory footprint vs.
-# guaranteeing we never hit TMDb twice for the same data.
+# fetched once per process lifetime.
 # ---------------------------------------------------------------------------
 _provider_cache: Dict[int, Dict[str, Any]] = {}
 
@@ -36,12 +37,6 @@ def _slugify(name: str) -> str:
     """
     Convert a series name into a URL-friendly slug suitable for JustWatch
     deep-links.
-
-    Steps:
-        1. Normalize unicode to ASCII.
-        2. Lowercase.
-        3. Replace non-alphanumeric characters (except hyphens) with hyphens.
-        4. Collapse consecutive hyphens and strip leading/trailing hyphens.
     """
     normalized = unicodedata.normalize("NFKD", name)
     ascii_name = normalized.encode("ascii", "ignore").decode("ascii")
@@ -51,25 +46,61 @@ def _slugify(name: str) -> str:
     return slug
 
 
+def _normalize_title(title: str) -> str:
+    """Normalize a title for fuzzy comparison."""
+    t = (title or "").strip().lower()
+    t = re.sub(r"[^a-z0-9]", "", t)
+    return t
+
+
+def _extract_year(premiered: Optional[str]) -> Optional[int]:
+    """Extract a 4-digit year from a premiered date string."""
+    if isinstance(premiered, str) and len(premiered) >= 4 and premiered[:4].isdigit():
+        return int(premiered[:4])
+    return None
+
+
 def _find_tmdb_id_from_imdb(
-    client: TMDbClient, imdb_id: str
+    client: TMDbClient, imdb_id: str, series_name: Optional[str] = None
 ) -> Optional[int]:
     """
     Resolve a TMDb series ID from an IMDB ID via TMDb's /find endpoint.
 
+    If a series_name is provided, validates the match by comparing the
+    result's title against the expected name (normalized, case-insensitive).
+
     Returns:
-        The TMDb ID if found, or None on failure.
+        The TMDb ID if found and validated, or None on failure.
     """
     try:
-        payload = client._get(  # noqa: SLF001 — intentional internal use
+        payload = client._get(
             f"/find/{imdb_id}",
             params={"external_source": "imdb_id"},
         )
         tv_results = payload.get("tv_results", [])
         if tv_results and isinstance(tv_results, list):
+            for result in tv_results:
+                tmdb_id = result.get("id")
+                if tmdb_id is None:
+                    continue
+                # If no series name to validate against, take the first match
+                if not series_name:
+                    logger.debug("Resolved IMDB %s -> TMDb %s", imdb_id, tmdb_id)
+                    return int(tmdb_id)
+                # Validate title match
+                result_name = result.get("name") or result.get("original_name") or ""
+                if _normalize_title(result_name) == _normalize_title(series_name):
+                    logger.debug("Resolved IMDB %s -> TMDb %s (validated: %s)", imdb_id, tmdb_id, result_name)
+                    return int(tmdb_id)
+                # Partial match — name contains the search or vice versa
+                if (_normalize_title(series_name) in _normalize_title(result_name)
+                        or _normalize_title(result_name) in _normalize_title(series_name)):
+                    logger.debug("Resolved IMDB %s -> TMDb %s (partial: %s)", imdb_id, tmdb_id, result_name)
+                    return int(tmdb_id)
+            # If nothing validated, fall back to first result
             tmdb_id = tv_results[0].get("id")
             if tmdb_id is not None:
-                logger.debug("Resolved IMDB %s -> TMDb %s", imdb_id, tmdb_id)
+                logger.debug("Resolved IMDB %s -> TMDb %s (unvalidated first result)", imdb_id, tmdb_id)
                 return int(tmdb_id)
         logger.debug("No TMDb match found for IMDB ID %s", imdb_id)
         return None
@@ -78,26 +109,115 @@ def _find_tmdb_id_from_imdb(
         return None
 
 
+def _find_tmdb_id_from_title(
+    client: TMDbClient, series_name: str, premiered: Optional[str] = None
+) -> Optional[int]:
+    """
+    Resolve a TMDb series ID by searching TMDb's /search/tv endpoint
+    with the series name and optional premiere year.
+
+    Matching strategy:
+        1. Normalized exact title match (prioritized).
+        2. Normalized contains/partial match.
+        3. First result as fallback.
+
+    Args:
+        client: An initialised TMDbClient.
+        series_name: The series name to search for.
+        premiered: Optional premiered date string (e.g. "2017-04-15").
+
+    Returns:
+        The best-matching TMDb series ID, or None.
+    """
+    try:
+        search_year = _extract_year(premiered)
+        params: Dict[str, Any] = {"query": series_name}
+        if search_year:
+            params["first_air_date_year"] = search_year
+
+        payload = client._get("/search/tv", params=params)
+        results = payload.get("results", [])
+        if not results or not isinstance(results, list):
+            logger.debug("No TMDb search results for title '%s'", series_name)
+            return None
+
+        target = _normalize_title(series_name)
+        best_match = None
+        best_year_match = None
+
+        for result in results:
+            result_name = result.get("name") or result.get("original_name") or ""
+            result_normalized = _normalize_title(result_name)
+            result_id = result.get("id")
+            if result_id is None:
+                continue
+
+            # Exact normalized match
+            if result_normalized == target:
+                # Prefer year match if we have a year
+                if search_year:
+                    air_date = result.get("first_air_date") or ""
+                    if air_date[:4].isdigit() and abs(int(air_date[:4]) - search_year) <= 1:
+                        logger.debug(
+                            "Title+year match: '%s' -> TMDb %s",
+                            series_name, result_id,
+                        )
+                        return int(result_id)
+                    if best_match is None:
+                        best_match = result_id
+                else:
+                    logger.debug("Exact title match: '%s' -> TMDb %s", series_name, result_id)
+                    return int(result_id)
+
+            # Partial match
+            if best_year_match is None and (
+                target in result_normalized or result_normalized in target
+            ):
+                best_year_match = result_id
+
+        if best_match is not None:
+            logger.debug("Best exact title match (no year): '%s' -> TMDb %s", series_name, best_match)
+            return int(best_match)
+
+        if best_year_match is not None:
+            logger.debug("Best partial match: '%s' -> TMDb %s", series_name, best_year_match)
+            return int(best_year_match)
+
+        # Last resort: first result
+        first_id = results[0].get("id")
+        if first_id is not None:
+            logger.debug("Fallback first result for '%s' -> TMDb %s", series_name, first_id)
+            return int(first_id)
+
+        return None
+
+    except (TMDbAPIError, (TypeError, ValueError)) as exc:
+        logger.warning("Failed to search TMDb for '%s': %s", series_name, exc)
+        return None
+
+
 def get_watch_providers_for_series(
     tvmaze_id: int,
     imdb_id: Optional[str] = None,
     region: Optional[str] = None,
+    series_name: Optional[str] = None,
+    premiered: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Fetch streaming-provider availability for a series.
 
     Resolution order:
         1. If an ``imdb_id`` is supplied, look up the TMDb ID via TMDb's
-           /find endpoint.
-        2. Use the resolved TMDb ID to fetch watch providers.
+           /find endpoint (with title validation if series_name is given).
+        2. If IMDB resolution fails, search TMDb by title+year.
+        3. Use the resolved TMDb ID to fetch watch providers.
 
     Args:
-        tvmaze_id: TVmaze series identifier (used only as a cache key /
-            logging context when the TMDb lookup fails).
-        imdb_id: IMDB identifier string (e.g. "tt1234567").  May be None
-            if the caller doesn't have one.
-        region: ISO 3166-1 country code to scope providers to.  Defaults
-            to "IN" (handled by the underlying TMDbClient).
+        tvmaze_id: TVmaze series identifier.
+        imdb_id: IMDB identifier string.  May be None.
+        region: ISO 3166-1 country code.  Defaults to "IN".
+        series_name: Optional series name for title-based fallback.
+        premiered: Optional premiered date for year matching.
 
     Returns:
         A dict of the form::
@@ -106,23 +226,17 @@ def get_watch_providers_for_series(
                 "region": "IN",
                 "providers": {
                     "flatrate": [...],
+                    "ads": [...],
+                    "free": [...],
                     "rent": [...],
                     "buy": [...],
-                    "free": [...],
                 },
                 "link": "https://www.themoviedb.org/tv/..."
             }
 
-        Returns an empty dict when no data can be obtained (missing API
-        key, lookup failure, or no providers in the region).
+        Returns an empty dict when no data can be obtained.
     """
-    if not imdb_id:
-        logger.debug(
-            "No IMDB ID for TVmaze %s — cannot resolve TMDb ID.", tvmaze_id
-        )
-        return {}
-
-    # ---- Build client (may raise ConfigError) ----
+    # ---- Build client ----
     try:
         client = TMDbClient()
     except (ConfigError, Exception) as exc:
@@ -132,8 +246,19 @@ def get_watch_providers_for_series(
         return {}
 
     # ---- Resolve TMDb ID ----
-    tmdb_id = _find_tmdb_id_from_imdb(client, imdb_id)
+    tmdb_id = None
+
+    if imdb_id:
+        tmdb_id = _find_tmdb_id_from_imdb(client, imdb_id, series_name)
+
+    if tmdb_id is None and series_name:
+        tmdb_id = _find_tmdb_id_from_title(client, series_name, premiered)
+
     if tmdb_id is None:
+        logger.debug(
+            "Could not resolve TMDb ID for TVmaze %s (IMDB: %s, name: %s)",
+            tvmaze_id, imdb_id, series_name,
+        )
         return {}
 
     # ---- Cache check ----
@@ -149,31 +274,25 @@ def get_watch_providers_for_series(
     except (TMDbAPIError, Exception) as exc:
         logger.warning(
             "Failed to fetch watch providers for TMDb %s (TVmaze %s): %s",
-            tmdb_id,
-            tvmaze_id,
-            exc,
+            tmdb_id, tvmaze_id, exc,
         )
         return {}
 
-    # ---- Build link via series details (best-effort) ----
+    # ---- Build link ----
     link = ""
     try:
         details = client.fetch_tv_details(tmdb_id)
         link = details.get("homepage") or f"https://www.themoviedb.org/tv/{tmdb_id}"
-    except (TMDbAPIError, Exception) as exc:
-        logger.debug(
-            "Could not fetch series details for TMDb %s, using generic link: %s",
-            tmdb_id,
-            exc,
-        )
+    except (TMDbAPIError, Exception):
         link = f"https://www.themoviedb.org/tv/{tmdb_id}"
 
     # Normalise to the full shape expected by callers.
     providers = {
         "flatrate": providers_raw.get("flatrate", []),
+        "ads": providers_raw.get("ads", []),
+        "free": providers_raw.get("free", []),
         "rent": providers_raw.get("rent", []),
         "buy": providers_raw.get("buy", []),
-        "free": providers_raw.get("free", []),
     }
 
     effective_region = region or "IN"
@@ -191,13 +310,6 @@ def get_watch_providers_for_series(
 def get_provider_page_url(series_name: str) -> Optional[str]:
     """
     Build a JustWatch search URL as a fallback for manual browsing.
-
-    Args:
-        series_name: The human-readable series name to slugify.
-
-    Returns:
-        A fully-qualified JustWatch URL, or None if *series_name* is
-        empty after stripping.
     """
     name = (series_name or "").strip()
     if not name:

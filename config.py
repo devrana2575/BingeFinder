@@ -181,3 +181,40 @@ SCHEMA_PATH: Path = PROJECT_ROOT / "database" / "schema.sql"
 # Logging configuration
 # ---------------------------------------------------------------------------
 LOG_LEVEL: str = _get_optional_env("LOG_LEVEL", "INFO")
+
+# ---------------------------------------------------------------------------
+# Authentication configuration
+# ---------------------------------------------------------------------------
+import secrets as _secrets
+
+
+def get_jwt_secret() -> str:
+    """
+    Retrieve the secret key used for session tokens.
+
+    Returns:
+        The JWT secret as a string. If JWT_SECRET is not set, a random
+        secret is generated (suitable for development only — set a
+        stable secret in production to avoid invalidating sessions on
+        restart).
+    """
+    value = os.getenv("JWT_SECRET")
+    if value:
+        return value
+    # Dev fallback: random per process (sessions won't survive restart)
+    return _secrets.token_hex(32)
+
+
+def get_bcrypt_rounds() -> int:
+    """
+    Retrieve the bcrypt hashing rounds.
+
+    Returns:
+        The number of rounds (default 12).
+    """
+    raw = os.getenv("BCRYPT_ROUNDS", "12")
+    try:
+        rounds = int(raw)
+        return max(4, min(rounds, 31))  # clamp to valid range
+    except (ValueError, TypeError):
+        return 12

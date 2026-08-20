@@ -148,25 +148,28 @@ def test_hidden_gems_from_catalog(seeded_mongo_manager):
 
 # --- Watchlist tests ---
 
+TEST_USER_ID = "test_user_001"
+TEST_USER_ID_B = "test_user_002"
+
 def test_watchlist_add_and_remove(seeded_mongo_manager):
-    """Add and remove a series from the watchlist."""
+    """Add and remove a series from a user's watchlist."""
     from database.watchlist import WatchlistManager
     wl = WatchlistManager(seeded_mongo_manager)
 
-    result = wl.add_to_watchlist(1001)
+    result = wl.add_to_watchlist(TEST_USER_ID, 1001)
     assert result == "added"
 
-    assert wl.is_in_watchlist(1001) is True
+    assert wl.is_in_watchlist(TEST_USER_ID, 1001) is True
 
-    result = wl.add_to_watchlist(1001)
+    result = wl.add_to_watchlist(TEST_USER_ID, 1001)
     assert result == "already_exists"
 
-    result = wl.remove_from_watchlist(1001)
+    result = wl.remove_from_watchlist(TEST_USER_ID, 1001)
     assert result == "removed"
 
-    assert wl.is_in_watchlist(1001) is False
+    assert wl.is_in_watchlist(TEST_USER_ID, 1001) is False
 
-    result = wl.remove_from_watchlist(1001)
+    result = wl.remove_from_watchlist(TEST_USER_ID, 1001)
     assert result == "not_found"
 
 def test_watchlist_get_all(seeded_mongo_manager):
@@ -174,11 +177,11 @@ def test_watchlist_get_all(seeded_mongo_manager):
     from database.watchlist import WatchlistManager
     wl = WatchlistManager(seeded_mongo_manager)
 
-    wl.add_to_watchlist(1001)
-    wl.add_to_watchlist(1002)
-    wl.add_to_watchlist(1003)
+    wl.add_to_watchlist(TEST_USER_ID, 1001)
+    wl.add_to_watchlist(TEST_USER_ID, 1002)
+    wl.add_to_watchlist(TEST_USER_ID, 1003)
 
-    items = wl.get_watchlist()
+    items = wl.get_watchlist(TEST_USER_ID)
     assert len(items) == 3
     ids = [item["tvmaze_id"] for item in items]
     assert 1001 in ids
@@ -190,11 +193,35 @@ def test_watchlist_count(seeded_mongo_manager):
     from database.watchlist import WatchlistManager
     wl = WatchlistManager(seeded_mongo_manager)
 
-    assert wl.get_watchlist_count() == 0
-    wl.add_to_watchlist(1001)
-    assert wl.get_watchlist_count() == 1
-    wl.remove_from_watchlist(1001)
-    assert wl.get_watchlist_count() == 0
+    assert wl.get_watchlist_count(TEST_USER_ID) == 0
+    wl.add_to_watchlist(TEST_USER_ID, 1001)
+    assert wl.get_watchlist_count(TEST_USER_ID) == 1
+    wl.remove_from_watchlist(TEST_USER_ID, 1001)
+    assert wl.get_watchlist_count(TEST_USER_ID) == 0
+
+def test_user_watchlist_isolation(seeded_mongo_manager):
+    """User A's watchlist must not appear in User B's watchlist."""
+    from database.watchlist import WatchlistManager
+    wl = WatchlistManager(seeded_mongo_manager)
+
+    wl.add_to_watchlist(TEST_USER_ID, 1001)
+    wl.add_to_watchlist(TEST_USER_ID, 1002)
+
+    wl.add_to_watchlist(TEST_USER_ID_B, 1003)
+
+    items_a = wl.get_watchlist(TEST_USER_ID)
+    items_b = wl.get_watchlist(TEST_USER_ID_B)
+
+    ids_a = [item["tvmaze_id"] for item in items_a]
+    ids_b = [item["tvmaze_id"] for item in items_b]
+
+    assert 1001 in ids_a
+    assert 1002 in ids_a
+    assert 1003 not in ids_a
+
+    assert 1003 in ids_b
+    assert 1001 not in ids_b
+    assert 1002 not in ids_b
 
 # --- Preprocessing tests ---
 

@@ -381,18 +381,18 @@ def get_trending_series(docs: List[Dict[str, Any]], limit: int = 10) -> List[Dic
 
 
 # ---------------------------------------------------------------------------
-# Watchlist helpers
+# Watchlist helpers (user-specific)
 # ---------------------------------------------------------------------------
 
-def add_to_watchlist(tvmaze_id: int) -> Tuple[bool, Optional[str]]:
-    """Add a series to the watchlist. Returns (success, error_message)."""
+def add_to_watchlist(user_id: str, tvmaze_id: int) -> Tuple[bool, Optional[str]]:
+    """Add a series to a user's watchlist. Returns (success, error_message)."""
     manager, err = _connect()
     if err:
         return False, err
     try:
         from database.watchlist import WatchlistManager
         wl = WatchlistManager(manager)
-        result = wl.add_to_watchlist(tvmaze_id)
+        result = wl.add_to_watchlist(user_id, tvmaze_id)
         return True, None if result == "added" else None
     except Exception as exc:
         return False, f"Could not add to watchlist: {exc}"
@@ -400,15 +400,15 @@ def add_to_watchlist(tvmaze_id: int) -> Tuple[bool, Optional[str]]:
         manager.close()
 
 
-def remove_from_watchlist(tvmaze_id: int) -> Tuple[bool, Optional[str]]:
-    """Remove a series from the watchlist. Returns (success, error_message)."""
+def remove_from_watchlist(user_id: str, tvmaze_id: int) -> Tuple[bool, Optional[str]]:
+    """Remove a series from a user's watchlist. Returns (success, error_message)."""
     manager, err = _connect()
     if err:
         return False, err
     try:
         from database.watchlist import WatchlistManager
         wl = WatchlistManager(manager)
-        wl.remove_from_watchlist(tvmaze_id)
+        wl.remove_from_watchlist(user_id, tvmaze_id)
         return True, None
     except Exception as exc:
         return False, f"Could not remove from watchlist: {exc}"
@@ -416,35 +416,34 @@ def remove_from_watchlist(tvmaze_id: int) -> Tuple[bool, Optional[str]]:
         manager.close()
 
 
-def is_in_watchlist(tvmaze_id: int) -> bool:
-    """Check if a series is in the watchlist."""
+def is_in_watchlist(user_id: str, tvmaze_id: int) -> bool:
+    """Check if a series is in a user's watchlist."""
     manager, err = _connect()
     if err:
         return False
     try:
         from database.watchlist import WatchlistManager
         wl = WatchlistManager(manager)
-        return wl.is_in_watchlist(tvmaze_id)
+        return wl.is_in_watchlist(user_id, tvmaze_id)
     except Exception:
         return False
     finally:
         manager.close()
 
 
-def get_watchlist_series() -> Tuple[List[Dict[str, Any]], Optional[str]]:
-    """Load all watchlist items enriched with their series data. Returns (series_list, error_message)."""
+def get_watchlist_series(user_id: str) -> Tuple[List[Dict[str, Any]], Optional[str]]:
+    """Load all watchlist items for a user, enriched with series data."""
     manager, err = _connect()
     if err:
         return [], err
     try:
         from database.watchlist import WatchlistManager
         wl = WatchlistManager(manager)
-        watchlist_docs = wl.get_watchlist()
-        
-        # Enrich with series data from the cached catalog
+        watchlist_docs = wl.get_watchlist(user_id)
+
         docs, _ = load_all_series()
         series_map = {d["tvmaze_id"]: d for d in docs if d.get("tvmaze_id") is not None}
-        
+
         result = []
         for wl_doc in watchlist_docs:
             sid = wl_doc.get("tvmaze_id")
@@ -460,6 +459,130 @@ def get_watchlist_series() -> Tuple[List[Dict[str, Any]], Optional[str]]:
 
 
 # ---------------------------------------------------------------------------
+# Likes helpers (user-specific)
+# ---------------------------------------------------------------------------
+
+def like_series(user_id: str, tvmaze_id: int) -> Tuple[bool, Optional[str]]:
+    """Like a series for a user. Returns (success, error_message)."""
+    manager, err = _connect()
+    if err:
+        return False, err
+    try:
+        from database.likes import LikesManager
+        lm = LikesManager(manager)
+        lm.like(user_id, tvmaze_id)
+        return True, None
+    except Exception as exc:
+        return False, f"Could not like series: {exc}"
+    finally:
+        manager.close()
+
+
+def unlike_series(user_id: str, tvmaze_id: int) -> Tuple[bool, Optional[str]]:
+    """Unlike a series for a user. Returns (success, error_message)."""
+    manager, err = _connect()
+    if err:
+        return False, err
+    try:
+        from database.likes import LikesManager
+        lm = LikesManager(manager)
+        lm.unlike(user_id, tvmaze_id)
+        return True, None
+    except Exception as exc:
+        return False, f"Could not unlike series: {exc}"
+    finally:
+        manager.close()
+
+
+def is_liked(user_id: str, tvmaze_id: int) -> bool:
+    """Check if a user has liked a series."""
+    manager, err = _connect()
+    if err:
+        return False
+    try:
+        from database.likes import LikesManager
+        lm = LikesManager(manager)
+        return lm.is_liked(user_id, tvmaze_id)
+    except Exception:
+        return False
+    finally:
+        manager.close()
+
+
+def get_liked_series(user_id: str) -> Tuple[List[Dict[str, Any]], Optional[str]]:
+    """Load all liked series for a user, enriched with series data."""
+    manager, err = _connect()
+    if err:
+        return [], err
+    try:
+        from database.likes import LikesManager
+        lm = LikesManager(manager)
+        liked_docs = lm.get_liked_series(user_id)
+
+        docs, _ = load_all_series()
+        series_map = {d["tvmaze_id"]: d for d in docs if d.get("tvmaze_id") is not None}
+
+        result = []
+        for lk_doc in liked_docs:
+            sid = lk_doc.get("tvmaze_id")
+            if sid in series_map:
+                entry = dict(series_map[sid])
+                entry["liked_at"] = lk_doc.get("liked_at")
+                result.append(entry)
+        return result, None
+    except Exception as exc:
+        return [], f"Could not load liked series: {exc}"
+    finally:
+        manager.close()
+
+
+# ---------------------------------------------------------------------------
+# Recently Viewed helpers (user-specific)
+# ---------------------------------------------------------------------------
+
+def record_view(user_id: str, tvmaze_id: int) -> None:
+    """Record that a user viewed a series (fire-and-forget)."""
+    manager, err = _connect()
+    if err:
+        return
+    try:
+        from database.recently_viewed import RecentlyViewedManager
+        rvm = RecentlyViewedManager(manager)
+        rvm.record_view(user_id, tvmaze_id)
+    except Exception:
+        pass
+    finally:
+        manager.close()
+
+
+def get_recently_viewed(user_id: str, limit: int = 10) -> Tuple[List[Dict[str, Any]], Optional[str]]:
+    """Load recently viewed series for a user, enriched with series data."""
+    manager, err = _connect()
+    if err:
+        return [], err
+    try:
+        from database.recently_viewed import RecentlyViewedManager
+        rvm = RecentlyViewedManager(manager)
+        recent_docs = rvm.get_recently_viewed(user_id, limit)
+
+        docs, _ = load_all_series()
+        series_map = {d["tvmaze_id"]: d for d in docs if d.get("tvmaze_id") is not None}
+
+        result = []
+        for rv_doc in recent_docs:
+            sid = rv_doc.get("tvmaze_id")
+            if sid in series_map:
+                entry = dict(series_map[sid])
+                entry["viewed_at"] = rv_doc.get("viewed_at")
+                result.append(entry)
+        return result, None
+    except Exception as exc:
+        return [], f"Could not load recently viewed: {exc}"
+    finally:
+        manager.close()
+
+
+# ---------------------------------------------------------------------------
 # Recommendations (existing Phase 3 engine — untouched).
 # ---------------------------------------------------------------------------
 
@@ -470,10 +593,7 @@ def fetch_recommendations(
     Call the existing recommender.recommend.get_recommendations() as-is.
 
     Returns:
-        (recommendations, None) on success (recommendations may be an
-        empty list if the model genuinely has nothing else to suggest),
-        or ([], error_message) if the model isn't built yet or the
-        series isn't in the model.
+        (recommendations, None) on success, or ([], error_message).
     """
     try:
         from recommender.exceptions import ModelNotBuiltError, RecommenderError, SeriesNotFoundError
@@ -495,3 +615,111 @@ def fetch_recommendations(
         )
     except RecommenderError as exc:
         return [], f"Could not generate recommendations: {exc}"
+
+
+# ---------------------------------------------------------------------------
+# Personalized recommendations (uses existing TF-IDF model).
+# ---------------------------------------------------------------------------
+
+def fetch_personalized_recommendations(
+    user_id: str, top_n: int = 12
+) -> Tuple[List[Dict[str, Any]], Optional[str]]:
+    """
+    Generate personalized recommendations based on a user's watchlist,
+    recently viewed, and liked series.
+
+    Uses the existing TF-IDF + cosine similarity model by computing a
+    user preference vector from the average of interacted series vectors.
+
+    Returns:
+        (recommendations, None) or ([], error_message).
+    """
+    try:
+        from recommender.exceptions import ModelNotBuiltError
+        from recommender.recommend import load_model
+        from sklearn.metrics.pairwise import cosine_similarity
+        import numpy as np
+    except Exception as exc:
+        return [], f"Recommendation engine could not be loaded: {exc}"
+
+    # Collect all interacted series IDs
+    manager, err = _connect()
+    if err:
+        return [], err
+
+    interacted_ids = set()
+    try:
+        from database.watchlist import WatchlistManager
+        from database.likes import LikesManager
+        from database.recently_viewed import RecentlyViewedManager
+
+        wl = WatchlistManager(manager)
+        for doc in wl.get_watchlist(user_id):
+            if doc.get("tvmaze_id"):
+                interacted_ids.add(doc["tvmaze_id"])
+
+        lm = LikesManager(manager)
+        for lid in lm.get_liked_series_ids(user_id):
+            interacted_ids.add(lid)
+
+        rvm = RecentlyViewedManager(manager)
+        for rid in rvm.get_recently_viewed_ids(user_id):
+            interacted_ids.add(rid)
+    except Exception:
+        pass
+    finally:
+        manager.close()
+
+    if not interacted_ids:
+        return [], None
+
+    # Load the TF-IDF model
+    try:
+        bundle = load_model()
+    except ModelNotBuiltError as exc:
+        return [], (
+            "The recommendation model hasn't been built yet. Run "
+            f"`python -m recommender.build_model` first. ({exc})"
+        )
+
+    series_ids = bundle["series_ids"]
+    tfidf_matrix = bundle["tfidf_matrix"]
+    metadata = bundle["metadata"]
+
+    # Build user preference vector by averaging interacted series vectors
+    user_rows = []
+    for sid in interacted_ids:
+        if sid in series_ids:
+            row_idx = series_ids.index(sid)
+            user_rows.append(row_idx)
+
+    if not user_rows:
+        return [], None
+
+    import numpy as np
+    user_vector = np.asarray(tfidf_matrix[user_rows].mean(axis=0))
+
+    # Compute cosine similarity against all series
+    similarity_scores = cosine_similarity(user_vector, tfidf_matrix).flatten()
+
+    # Sort by descending similarity, exclude already-interacted series
+    ranked_rows = similarity_scores.argsort()[::-1]
+
+    recommendations = []
+    for row in ranked_rows:
+        candidate_id = series_ids[row]
+        if candidate_id in interacted_ids:
+            continue
+        candidate_meta = metadata.get(candidate_id, {})
+        recommendations.append({
+            "series_id": candidate_id,
+            "title": candidate_meta.get("title"),
+            "rating": candidate_meta.get("rating"),
+            "genres": candidate_meta.get("genres", []),
+            "image": candidate_meta.get("image"),
+            "similarity_score": round(float(similarity_scores[row]), 4),
+        })
+        if len(recommendations) >= top_n:
+            break
+
+    return recommendations, None

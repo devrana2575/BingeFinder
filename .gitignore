@@ -48,3 +48,7 @@ htmlcov/
 
 # Logs
 *.log
+
+# Local secret overrides
+.env.local
+secrets.json

@@ -1,1 +1,1 @@
-"""api package: external API integrations (TVmaze — active; TMDb — unused, kept temporarily)."""
+"""api package: external API integrations (TMDb — watch-provider lookups)."""

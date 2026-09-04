@@ -100,41 +100,6 @@ MAX_RETRIES: int = int(_get_optional_env("MAX_RETRIES", "3"))
 BACKOFF_FACTOR: float = float(_get_optional_env("BACKOFF_FACTOR", "0.5"))
 
 # ---------------------------------------------------------------------------
-# TMDb sync pagination configuration
-# ---------------------------------------------------------------------------
-# Pages fetched per list endpoint (trending/popular/top_rated/on_the_air/
-# airing_today) when the database is empty vs. when it already has data.
-# A larger page count is used for the first sync to build up a broad
-# catalog; subsequent syncs use a smaller count to keep routine updates
-# fast and reduce redundant TMDb calls.
-INITIAL_SYNC_PAGES: int = int(_get_optional_env("INITIAL_SYNC_PAGES", "20"))
-UPDATE_SYNC_PAGES: int = int(_get_optional_env("UPDATE_SYNC_PAGES", "5"))
-
-# ---------------------------------------------------------------------------
-# TVmaze API configuration
-# ---------------------------------------------------------------------------
-# TVmaze requires no API key. TMDb is currently unreachable from this
-# network, so TVmaze + MongoDB (below) is the active ingestion backend;
-# the TMDb + SQLite modules are left in place, unused, until this
-# migration is fully verified.
-TVMAZE_BASE_URL: str = _get_optional_env("TVMAZE_BASE_URL", "https://api.tvmaze.com")
-
-# Catalog pages fetched per sync run (TVmaze pages are zero-indexed and
-# return ~250 shows each). Previously defaulted to 1 page (~250 shows),
-# which is why popular-but-not-top-250 shows (e.g. Money Heist) were
-# missing from MongoDB. Raised to 15 pages (~3,750 shows) for broader
-# coverage while still being a safe, bounded default. Override via the
-# TVMAZE_SYNC_PAGES env var (or pass `pages=` to run_update) to fetch
-# more/less; the existing pagination + upsert-by-tvmaze_id logic in
-# database/update_mongo.py handles any page count without duplicating
-# records or touching unrelated documents.
-TVMAZE_SYNC_PAGES: int = int(_get_optional_env("TVMAZE_SYNC_PAGES", "15"))
-
-# Max cast members stored per show (TVmaze lists cast in roughly billing
-# order, so the first N are the most relevant).
-TVMAZE_CAST_LIMIT: int = int(_get_optional_env("TVMAZE_CAST_LIMIT", "10"))
-
-# ---------------------------------------------------------------------------
 # MongoDB configuration
 # ---------------------------------------------------------------------------
 # NOTE: mirrors get_tmdb_api_key() below — not loaded at import time, so
@@ -164,18 +129,6 @@ def get_mongodb_database() -> str:
     """
     return _get_required_env("MONGODB_DATABASE")
 
-
-# ---------------------------------------------------------------------------
-# Database configuration
-# ---------------------------------------------------------------------------
-DATA_DIR: Path = PROJECT_ROOT / "data"
-DATA_DIR.mkdir(parents=True, exist_ok=True)
-
-DATABASE_PATH: str = _get_optional_env(
-    "DATABASE_PATH", str(DATA_DIR / "bingefinder.db")
-)
-
-SCHEMA_PATH: Path = PROJECT_ROOT / "database" / "schema.sql"
 
 # ---------------------------------------------------------------------------
 # Logging configuration
@@ -218,3 +171,10 @@ def get_bcrypt_rounds() -> int:
         return max(4, min(rounds, 31))  # clamp to valid range
     except (ValueError, TypeError):
         return 12
+
+
+# ---------------------------------------------------------------------------
+# Recommendation engine configuration
+# ---------------------------------------------------------------------------
+EMBEDDING_MODEL_NAME: str = _get_optional_env("EMBEDDING_MODEL_NAME", "all-MiniLM-L6-v2")
+REBUILD_MODEL_TTL_HOURS: int = int(_get_optional_env("REBUILD_MODEL_TTL_HOURS", "24"))

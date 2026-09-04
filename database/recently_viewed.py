@@ -4,7 +4,7 @@ database/recently_viewed.py
 Tracks recently viewed series for logged-in users, backed by MongoDB.
 
 Design notes:
-    - A compound unique index on ``(user_id, tvmaze_id)`` ensures each
+    - A compound unique index on ``(user_id, series_id)`` ensures each
       series appears at most once per user.
     - Viewing a series again updates the ``viewed_at`` timestamp.
     - Maximum 50 entries per user (oldest pruned automatically).
@@ -52,7 +52,7 @@ class RecentlyViewedManager:
         """Create compound unique index and sort index."""
         try:
             self._collection.create_index(
-                [("user_id", 1), ("tvmaze_id", 1)],
+                [("user_id", 1), ("series_id", 1)],
                 unique=True,
                 name="uniq_recently_viewed_user_series",
             )
@@ -66,7 +66,7 @@ class RecentlyViewedManager:
                 f"Failed to create indexes on recently_viewed: {exc}"
             ) from exc
 
-    def record_view(self, user_id: str, tvmaze_id: int) -> None:
+    def record_view(self, user_id: str, series_id: int) -> None:
         """
         Record that a user viewed a series.  If the series is already
         in the user's recently viewed list, its timestamp is updated.
@@ -76,15 +76,15 @@ class RecentlyViewedManager:
         now = datetime.now(timezone.utc).isoformat(timespec="seconds")
         try:
             self._collection.update_one(
-                {"user_id": user_id, "tvmaze_id": tvmaze_id},
+                {"user_id": user_id, "series_id": series_id},
                 {"$set": {"viewed_at": now}},
                 upsert=True,
             )
             self._prune(user_id)
         except PyMongoError as exc:
             logger.error(
-                "Failed to record view for user %s, tvmaze_id=%s: %s",
-                user_id, tvmaze_id, exc,
+                "Failed to record view for user %s, series_id=%s: %s",
+                user_id, series_id, exc,
             )
 
     def _prune(self, user_id: str) -> None:
@@ -124,15 +124,15 @@ class RecentlyViewedManager:
             return []
 
     def get_recently_viewed_ids(self, user_id: str, limit: int = 10) -> List[int]:
-        """Return just the tvmaze_ids of recently viewed series."""
+        """Return just the series_ids of recently viewed series."""
         recent = self.get_recently_viewed(user_id, limit)
-        return [r["tvmaze_id"] for r in recent if "tvmaze_id" in r]
+        return [r["series_id"] for r in recent if "series_id" in r]
 
-    def is_viewed(self, user_id: str, tvmaze_id: int) -> bool:
+    def is_viewed(self, user_id: str, series_id: int) -> bool:
         """Check if a user has viewed a series."""
         try:
             return self._collection.find_one(
-                {"user_id": user_id, "tvmaze_id": tvmaze_id}
+                {"user_id": user_id, "series_id": series_id}
             ) is not None
         except PyMongoError:
             return False

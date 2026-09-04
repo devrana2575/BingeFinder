@@ -4,24 +4,23 @@ recommender/preprocess.py
 Turns a raw `series` MongoDB document into the plain-text "content soup"
 that the TF-IDF vectorizer is fitted on.
 
-Only fields that actually exist in the `series` schema (see
-database/update_mongo.py's `_map_tvmaze_show_to_document`) are read here.
+Only fields that actually exist in the `series` schema are read here.
 Nothing is invented: any field that is missing, None, or an empty
 list/dict on a given document simply contributes nothing to that
 document's text, instead of raising an error.
 
-Field usage (per the Phase 3 spec):
+Field usage:
     - name     -> series title, added as the first token so TF-IDF can
                   distinguish shows with similar plots but different themes.
-    - summary  -> primary signal, used as-is (already HTML-stripped by
-                  api.tvmaze.clean_summary during ingestion).
+    - summary  -> primary signal, used as-is (already HTML-stripped
+                  during ingestion).
     - genres   -> primary signal, repeated a few times so the vectorizer
                   weighs genre words more heavily than the other
                   (secondary) fields below. This is a simple, explainable
                   way to bias TF-IDF without hand-tuning per-term weights.
     - cast     -> secondary signal: top billed cast member names.
     - network / web_channel -> secondary signal: the broadcaster/streamer
-      name. TVmaze stores these as nested objects (e.g.
+      name. These are stored as nested objects (e.g.
       {"id": 1, "name": "HBO", "country": {...}}), never as plain
       strings, so the name is pulled out defensively.
 """
@@ -33,9 +32,9 @@ from typing import Any, Dict, List, Optional
 # still letting the (usually much longer) summary dominate naturally.
 GENRE_WEIGHT = 3
 
-# Only the top-billed cast members are used — TVmaze already orders cast
-# by importance, and a full cast list would dilute the more meaningful
-# summary/genre signal.
+# Only the top-billed cast members are used — the source already orders
+# cast by importance, and a full cast list would dilute the more
+# meaningful summary/genre signal.
 CAST_NAME_LIMIT = 5
 
 
@@ -81,7 +80,7 @@ def _extract_channel_name(channel_obj: Any) -> Optional[str]:
     """
     Pull a display name out of a `network` or `web_channel` field.
 
-    TVmaze represents both as nested objects (or null), e.g.
+    These are stored as nested objects (or null), e.g.
     {"id": 8, "name": "HBO", "country": {"name": "United States", ...}}.
     Returns None if the field is missing, null, or has no "name".
     """

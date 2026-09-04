@@ -32,14 +32,8 @@ build/
 Thumbs.db
 desktop.ini
 
-# Streamlit
-.streamlit/secrets.toml
-
 # Model artifacts (rebuild locally)
 recommender/artifacts/*.joblib
-
-# SQLite database (legacy)
-data/*.db
 
 # Testing
 .pytest_cache/

@@ -1,23 +1,22 @@
 """
 tests/sample_series.py
 =========================
-Sample `series` documents shaped EXACTLY like the documents
-database/update_mongo.py writes to MongoDB (same keys, same nesting for
-network/web_channel/cast — see _map_tvmaze_show_to_document).
+Sample `series` documents shaped like the documents stored in MongoDB
+(same keys, same nesting for network/web_channel/cast).
 
-These are original, hand-written descriptions (not copied from TVmaze or
-any other source) used only to exercise the recommendation pipeline in
-environments where a live MongoDB/TVmaze connection isn't available
-(e.g. this sandbox). Swap this out for `mongo_manager.get_all_series()`
-against your real database — the recommender code itself doesn't know
-or care where the documents came from.
+These are original, hand-written descriptions used only to exercise the
+recommendation pipeline in environments where a live MongoDB connection
+isn't available (e.g. this sandbox). Swap this out for
+`mongo_manager.get_all_series()` against your real database — the
+recommender code itself doesn't know or care where the documents came
+from.
 """
 
 from typing import Any, Dict, List
 
 SAMPLE_SERIES: List[Dict[str, Any]] = [
     {
-        "tvmaze_id": 1001,
+        "series_id": 1001,
         "name": "Ashfall City",
         "original_name": None,
         "language": "English",
@@ -46,7 +45,7 @@ SAMPLE_SERIES: List[Dict[str, Any]] = [
         ],
     },
     {
-        "tvmaze_id": 1002,
+        "series_id": 1002,
         "name": "Harborline",
         "original_name": None,
         "language": "English",
@@ -75,7 +74,7 @@ SAMPLE_SERIES: List[Dict[str, Any]] = [
         ],
     },
     {
-        "tvmaze_id": 1003,
+        "series_id": 1003,
         "name": "Lightless Frontier",
         "original_name": None,
         "language": "English",
@@ -104,7 +103,7 @@ SAMPLE_SERIES: List[Dict[str, Any]] = [
         ],
     },
     {
-        "tvmaze_id": 1004,
+        "series_id": 1004,
         "name": "Second Horizon",
         "original_name": None,
         "language": "English",
@@ -133,7 +132,7 @@ SAMPLE_SERIES: List[Dict[str, Any]] = [
         ],
     },
     {
-        "tvmaze_id": 1005,
+        "series_id": 1005,
         "name": "The Bakeshop on Third",
         "original_name": None,
         "language": "English",
@@ -162,7 +161,7 @@ SAMPLE_SERIES: List[Dict[str, Any]] = [
         ],
     },
     {
-        "tvmaze_id": 1006,
+        "series_id": 1006,
         "name": "No Vacancy",
         "original_name": None,
         "language": "English",
@@ -190,7 +189,7 @@ SAMPLE_SERIES: List[Dict[str, Any]] = [
         ],
     },
     {
-        "tvmaze_id": 1007,
+        "series_id": 1007,
         "name": "Quiet Hollow",
         "original_name": None,
         "language": "English",
@@ -218,7 +217,7 @@ SAMPLE_SERIES: List[Dict[str, Any]] = [
     # Deliberately sparse / missing-data documents, to exercise the
     # "missing data does not crash the system" requirement.
     {
-        "tvmaze_id": 1008,
+        "series_id": 1008,
         "name": "Untitled Pilot",
         "original_name": None,
         "language": None,
@@ -244,7 +243,7 @@ SAMPLE_SERIES: List[Dict[str, Any]] = [
     {
         # No usable text content at all: must be skipped during build,
         # not crash it.
-        "tvmaze_id": 1009,
+        "series_id": 1009,
         "name": "Blank Slate",
         "original_name": None,
         "language": None,

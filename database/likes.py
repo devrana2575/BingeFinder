@@ -4,7 +4,7 @@ database/likes.py
 User-specific like/unlike functionality backed by MongoDB.
 
 Design notes:
-    - A compound unique index on ``(user_id, tvmaze_id)`` prevents
+    - A compound unique index on ``(user_id, series_id)`` prevents
       duplicate likes per user.
     - Each user can like a series only once.
 """
@@ -45,10 +45,10 @@ class LikesManager:
         self._ensure_indexes()
 
     def _ensure_indexes(self) -> None:
-        """Create compound unique index on (user_id, tvmaze_id)."""
+        """Create compound unique index on (user_id, series_id)."""
         try:
             self._collection.create_index(
-                [("user_id", 1), ("tvmaze_id", 1)],
+                [("user_id", 1), ("series_id", 1)],
                 unique=True,
                 name="uniq_likes_user_series",
             )
@@ -58,7 +58,7 @@ class LikesManager:
                 f"Failed to create unique index on likes: {exc}"
             ) from exc
 
-    def like(self, user_id: str, tvmaze_id: int) -> str:
+    def like(self, user_id: str, series_id: int) -> str:
         """
         Like a series for a user.
 
@@ -67,22 +67,22 @@ class LikesManager:
         """
         document = {
             "user_id": user_id,
-            "tvmaze_id": tvmaze_id,
+            "series_id": series_id,
             "liked_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         }
         try:
             self._collection.insert_one(document)
-            logger.info("User %s liked tvmaze_id=%s.", user_id, tvmaze_id)
+            logger.info("User %s liked series_id=%s.", user_id, series_id)
             return "liked"
         except PyMongoError as exc:
             if exc.code == 11000:
                 return "already_liked"
-            logger.error("Failed to like tvmaze_id=%s for user %s: %s", tvmaze_id, user_id, exc)
+            logger.error("Failed to like series_id=%s for user %s: %s", series_id, user_id, exc)
             raise MongoDatabaseError(
                 f"Failed to like series: {exc}"
             ) from exc
 
-    def unlike(self, user_id: str, tvmaze_id: int) -> str:
+    def unlike(self, user_id: str, series_id: int) -> str:
         """
         Unlike a series for a user.
 
@@ -91,26 +91,26 @@ class LikesManager:
         """
         try:
             result = self._collection.delete_one(
-                {"user_id": user_id, "tvmaze_id": tvmaze_id}
+                {"user_id": user_id, "series_id": series_id}
             )
             if result.deleted_count:
-                logger.info("User %s unliked tvmaze_id=%s.", user_id, tvmaze_id)
+                logger.info("User %s unliked series_id=%s.", user_id, series_id)
                 return "unliked"
             return "not_found"
         except PyMongoError as exc:
-            logger.error("Failed to unlike tvmaze_id=%s for user %s: %s", tvmaze_id, user_id, exc)
+            logger.error("Failed to unlike series_id=%s for user %s: %s", series_id, user_id, exc)
             raise MongoDatabaseError(
                 f"Failed to unlike series: {exc}"
             ) from exc
 
-    def is_liked(self, user_id: str, tvmaze_id: int) -> bool:
+    def is_liked(self, user_id: str, series_id: int) -> bool:
         """Check if a user has liked a series."""
         try:
             return self._collection.find_one(
-                {"user_id": user_id, "tvmaze_id": tvmaze_id}
+                {"user_id": user_id, "series_id": series_id}
             ) is not None
         except PyMongoError as exc:
-            logger.error("Failed to check like for user %s, tvmaze_id=%s: %s", user_id, tvmaze_id, exc)
+            logger.error("Failed to check like for user %s, series_id=%s: %s", user_id, series_id, exc)
             return False
 
     def get_liked_series(self, user_id: str) -> List[Dict[str, Any]]:
@@ -124,9 +124,9 @@ class LikesManager:
             raise MongoDatabaseError(f"Failed to get likes: {exc}") from exc
 
     def get_liked_series_ids(self, user_id: str) -> List[int]:
-        """Return just the tvmaze_ids of liked series for a user."""
+        """Return just the series_ids of liked series for a user."""
         likes = self.get_liked_series(user_id)
-        return [l["tvmaze_id"] for l in likes if "tvmaze_id" in l]
+        return [l["series_id"] for l in likes if "series_id" in l]
 
     def get_liked_count(self, user_id: str) -> int:
         """Return the number of liked series for a user."""

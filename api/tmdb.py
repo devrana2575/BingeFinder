@@ -9,8 +9,7 @@ Design notes:
       for connection pooling and automatic retries on transient failures.
     - All public methods return a `List[Dict[str, Any]]` of raw TMDb
       "result" objects. Parsing/mapping into our DB schema is intentionally
-      left to the caller (database/update_database.py) to keep this module
-      focused purely on API access.
+      left to the caller to keep this module focused purely on API access.
     - No recommendation logic lives here (out of scope for Phase 1).
 """
 

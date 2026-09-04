@@ -4,7 +4,7 @@ api/watch_providers.py
 Streaming-availability look-ups built on top of the existing TMDb client.
 
 The main entry point is `get_watch_providers_for_series()` which:
-    1. Accepts a TVmaze ID, optional IMDB ID, and optional series metadata.
+    1. Accepts a series ID, optional IMDB ID, and optional series metadata.
     2. If an IMDB ID is available, uses TMDb's /find endpoint to resolve a
        TMDb series ID (with title validation).
     3. Falls back to a title+year search via TMDb's /search/tv when IMDB
@@ -26,11 +26,16 @@ from utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-# ---------------------------------------------------------------------------
-# Module-level cache — keyed by TMDb series ID so the same series is only
-# fetched once per process lifetime.
-# ---------------------------------------------------------------------------
-_provider_cache: Dict[int, Dict[str, Any]] = {}
+# Default ISO 3166-1 region for availability lookups (free/ads are verified
+# against this region's provider set).
+DEFAULT_WATCH_REGION = "IN"
+
+# Maximum number of free/ad-supported providers surfaced to the user so the
+# free tier doesn't drown the UI (verified free/ads only).
+MAX_FREE_PROVIDERS = 3
+
+# Per-category display caps for paid options.
+MAX_PAID_PROVIDERS = {"flatrate": 3, "rent": 2, "buy": 2}
 
 
 def _slugify(name: str) -> str:
@@ -197,7 +202,7 @@ def _find_tmdb_id_from_title(
 
 
 def get_watch_providers_for_series(
-    tvmaze_id: int,
+    series_id: int,
     imdb_id: Optional[str] = None,
     region: Optional[str] = None,
     series_name: Optional[str] = None,
@@ -213,7 +218,7 @@ def get_watch_providers_for_series(
         3. Use the resolved TMDb ID to fetch watch providers.
 
     Args:
-        tvmaze_id: TVmaze series identifier.
+        series_id: series identifier.
         imdb_id: IMDB identifier string.  May be None.
         region: ISO 3166-1 country code.  Defaults to "IN".
         series_name: Optional series name for title-based fallback.
@@ -256,15 +261,16 @@ def get_watch_providers_for_series(
 
     if tmdb_id is None:
         logger.debug(
-            "Could not resolve TMDb ID for TVmaze %s (IMDB: %s, name: %s)",
-            tvmaze_id, imdb_id, series_name,
+            "Could not resolve TMDb ID for series %s (IMDB: %s, name: %s)",
+            series_id, imdb_id, series_name,
         )
         return {}
 
     # ---- Cache check ----
-    if tmdb_id in _provider_cache:
-        logger.debug("Returning cached watch providers for TMDb %s.", tmdb_id)
-        return _provider_cache[tmdb_id]
+    # The TTL-backed cache lives in backend.services.watch_provider_cache
+    # (CACHE_TTL_SECONDS = 600) and is the single source of caching for
+    # availability lookups. This function itself is deliberately uncached so
+    # there is only one, TTL-bounded cache instead of a second unbounded one.
 
     # ---- Fetch providers ----
     try:
@@ -273,8 +279,8 @@ def get_watch_providers_for_series(
         )
     except (TMDbAPIError, Exception) as exc:
         logger.warning(
-            "Failed to fetch watch providers for TMDb %s (TVmaze %s): %s",
-            tmdb_id, tvmaze_id, exc,
+            "Failed to fetch watch providers for TMDb %s (series %s): %s",
+            tmdb_id, series_id, exc,
         )
         return {}
 
@@ -295,24 +301,31 @@ def get_watch_providers_for_series(
         "buy": providers_raw.get("buy", []),
     }
 
-    effective_region = region or "IN"
+    effective_region = region or DEFAULT_WATCH_REGION
 
     result: Dict[str, Any] = {
         "region": effective_region,
         "providers": providers,
+        # TMDB availability page for this series in the requested region.
         "link": link,
+        # Canonical TMDB "where to watch" page. Both derived from the resolved
+        # TMDb id (real URLs, never hand-assembled or fabricated data).
+        "watch_now_url": f"https://www.themoviedb.org/tv/{tmdb_id}/watch?locale={effective_region}",
+        "tmdb_id": tmdb_id,
     }
-
-    _provider_cache[tmdb_id] = result
     return result
 
 
-def get_provider_page_url(series_name: str) -> Optional[str]:
+def get_provider_page_url(series_name: str, region: Optional[str] = None) -> Optional[str]:
     """
     Build a JustWatch search URL as a fallback for manual browsing.
+
+    Uses the target region path (default India) so the availability page
+    reflects the region we resolve providers against.
     """
     name = (series_name or "").strip()
     if not name:
         return None
     slug = _slugify(name)
-    return f"https://www.justwatch.com/us/tv-show/{slug}"
+    region_code = (region or DEFAULT_WATCH_REGION).lower()
+    return f"https://www.justwatch.com/{region_code}/tv-show/{slug}"

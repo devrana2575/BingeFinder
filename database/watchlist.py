@@ -6,7 +6,7 @@ User-specific watchlist backed by MongoDB.
 Design notes:
     - Each document includes a ``user_id`` field, so User A never sees
       User B's watchlist.
-    - A compound unique index on ``(user_id, tvmaze_id)`` prevents the
+    - A compound unique index on ``(user_id, series_id)`` prevents the
       same series from appearing twice in one user's watchlist.
     - The module reuses the existing ``MongoDBManager`` connection.
 """
@@ -51,18 +51,18 @@ class WatchlistManager:
     # ------------------------------------------------------------------
 
     def _ensure_indexes(self) -> None:
-        """Create compound unique index on (user_id, tvmaze_id) and drop
+        """Create compound unique index on (user_id, series_id) and drop
         the old single-field index if it exists."""
         try:
             existing = self._collection.index_information()
-            if "uniq_watchlist_tvmaze_id" in existing:
-                self._collection.drop_index("uniq_watchlist_tvmaze_id")
+            if "uniq_watchlist_series_id" in existing:
+                self._collection.drop_index("uniq_watchlist_series_id")
         except PyMongoError:
             pass
 
         try:
             self._collection.create_index(
-                [("user_id", 1), ("tvmaze_id", 1)],
+                [("user_id", 1), ("series_id", 1)],
                 unique=True,
                 name="uniq_watchlist_user_series",
             )
@@ -76,7 +76,7 @@ class WatchlistManager:
     # Public API
     # ------------------------------------------------------------------
 
-    def add_to_watchlist(self, user_id: str, tvmaze_id: int) -> str:
+    def add_to_watchlist(self, user_id: str, series_id: int) -> str:
         """
         Add a series to a user's watchlist.
 
@@ -85,23 +85,23 @@ class WatchlistManager:
         """
         document = {
             "user_id": user_id,
-            "tvmaze_id": tvmaze_id,
+            "series_id": series_id,
             "added_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         }
         try:
             self._collection.insert_one(document)
-            logger.info("Added tvmaze_id=%s to watchlist for user %s.", tvmaze_id, user_id)
+            logger.info("Added series_id=%s to watchlist for user %s.", series_id, user_id)
             return "added"
         except PyMongoError as exc:
             if exc.code == 11000:
-                logger.info("tvmaze_id=%s already in watchlist for user %s.", tvmaze_id, user_id)
+                logger.info("series_id=%s already in watchlist for user %s.", series_id, user_id)
                 return "already_exists"
-            logger.error("Failed to add tvmaze_id=%s to watchlist: %s", tvmaze_id, exc)
+            logger.error("Failed to add series_id=%s to watchlist: %s", series_id, exc)
             raise MongoDatabaseError(
-                f"Failed to add tvmaze_id={tvmaze_id} to watchlist: {exc}"
+                f"Failed to add series_id={series_id} to watchlist: {exc}"
             ) from exc
 
-    def remove_from_watchlist(self, user_id: str, tvmaze_id: int) -> str:
+    def remove_from_watchlist(self, user_id: str, series_id: int) -> str:
         """
         Remove a series from a user's watchlist.
 
@@ -110,17 +110,17 @@ class WatchlistManager:
         """
         try:
             result = self._collection.delete_one(
-                {"user_id": user_id, "tvmaze_id": tvmaze_id}
+                {"user_id": user_id, "series_id": series_id}
             )
             if result.deleted_count:
-                logger.info("Removed tvmaze_id=%s from watchlist for user %s.", tvmaze_id, user_id)
+                logger.info("Removed series_id=%s from watchlist for user %s.", series_id, user_id)
                 return "removed"
-            logger.info("tvmaze_id=%s not found in watchlist for user %s.", tvmaze_id, user_id)
+            logger.info("series_id=%s not found in watchlist for user %s.", series_id, user_id)
             return "not_found"
         except PyMongoError as exc:
-            logger.error("Failed to remove tvmaze_id=%s from watchlist: %s", tvmaze_id, exc)
+            logger.error("Failed to remove series_id=%s from watchlist: %s", series_id, exc)
             raise MongoDatabaseError(
-                f"Failed to remove tvmaze_id={tvmaze_id} from watchlist: {exc}"
+                f"Failed to remove series_id={series_id} from watchlist: {exc}"
             ) from exc
 
     def get_watchlist(self, user_id: str) -> List[Dict[str, Any]]:
@@ -136,16 +136,16 @@ class WatchlistManager:
             logger.error("Failed to fetch watchlist for user %s: %s", user_id, exc)
             raise MongoDatabaseError(f"Failed to fetch watchlist: {exc}") from exc
 
-    def is_in_watchlist(self, user_id: str, tvmaze_id: int) -> bool:
+    def is_in_watchlist(self, user_id: str, series_id: int) -> bool:
         """Check whether a series is in a user's watchlist."""
         try:
             return self._collection.find_one(
-                {"user_id": user_id, "tvmaze_id": tvmaze_id}
+                {"user_id": user_id, "series_id": series_id}
             ) is not None
         except PyMongoError as exc:
-            logger.error("Failed to check watchlist for user %s, tvmaze_id=%s: %s", user_id, tvmaze_id, exc)
+            logger.error("Failed to check watchlist for user %s, series_id=%s: %s", user_id, series_id, exc)
             raise MongoDatabaseError(
-                f"Failed to check watchlist for tvmaze_id={tvmaze_id}: {exc}"
+                f"Failed to check watchlist for series_id={series_id}: {exc}"
             ) from exc
 
     def get_watchlist_count(self, user_id: str) -> int:

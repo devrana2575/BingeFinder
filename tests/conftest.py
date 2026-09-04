@@ -11,9 +11,8 @@ This only exists because this sandbox has no reachable MongoDB server to
 test against. The code under test (database/mongo_client.py,
 recommender/*) is 100% unaware of this swap — it calls the exact same
 MongoDBManager methods either way. Point MONGODB_URI/MONGODB_DATABASE at
-a real MongoDB instance (already populated by
-`python -m database.update_mongo`) to run the same test file against
-real data instead.
+a real MongoDB instance (already populated) to run the same test file
+against real data instead.
 """
 
 import os

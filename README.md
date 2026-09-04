@@ -7,14 +7,14 @@ A data-science-powered web-series discovery and recommendation platform that hel
 ## Features
 
 - **Smart Search** — Search by title with exact-match priority; ambiguous titles (e.g. "Money Heist") show multiple candidates for the user to pick
-- **TVmaze Fallback** — When a title isn't in the local catalog, search TVmaze live and add the series on-demand
-- **Content-Based Recommendations** — TF-IDF + cosine similarity on summary, genres, cast, and network
+- **Content-Based Recommendations** — TF-IDF + cosine similarity + semantic embeddings on summary, genres, cast, and network
+- **Personalized Recommendations** — Weighted preference vector from likes, watchlist, and recently-viewed history, reranked with an adaptive LinUCB contextual bandit
 - **"Why This?" Explanations** — Every recommendation comes with a plain-language reason based on overlapping metadata
 - **Where to Watch** — Streaming provider availability via TMDb (Netflix, Prime, etc.) with legitimate "Watch Now" links
 - **Watchlist** — Save and manage your personal watchlist (persisted in MongoDB)
-- **Analytics** — Interactive Plotly charts: genre distribution, ratings, languages, premiere years, networks, and more
+- **Likes & Recently Viewed** — Track what you enjoy to sharpen recommendations
 - **Surprise Me** — One-click random series pick from the catalog
-- **Dynamic Visual Theme** — 6 cinematic dark themes that rotate automatically every 10 seconds with smooth CSS transitions
+- **Dynamic Visual Theme** — Cinematic dark themes with smooth transitions
 
 ---
 
@@ -22,41 +22,32 @@ A data-science-powered web-series discovery and recommendation platform that hel
 
 | Layer | Technology |
 |---|---|
-| Language | Python 3.10+ |
-| Frontend | Streamlit |
+| Backend | Python 3.10+ / FastAPI |
+| Frontend | React 19 + Vite + Tailwind CSS |
 | Database | MongoDB (via PyMongo) |
-| Data Source | TVmaze API (catalog), TMDb API (watch providers) |
-| ML | scikit-learn (TF-IDF Vectorizer, Cosine Similarity) |
-| Visualization | Plotly |
-| Styling | Custom CSS (Sora + Inter fonts, cinematic dark themes) |
+| Data Source | MongoDB catalog; TMDb API (watch providers) |
+| ML | scikit-learn (TF-IDF), sentence-transformers (embeddings), NumPy |
+| Adaptive Ranking | LinUCB contextual bandit |
 
 ---
 
 ## Architecture
 
 ```
-TVmaze API ──> Data Ingestion ──> MongoDB
+MongoDB ──> Data Access Layer ──> FastAPI ──> React SPA
                                       │
-                   ┌──────────────────┘
-                   ▼
-            Data Access Layer (cached)
-                   │
-         ┌─────────┼──────────┐
-         ▼         ▼          ▼
-   Recommender  Analytics  Watchlist
-   (TF-IDF)    (Plotly)   (MongoDB)
-         │
-         ▼
-   Cosine Similarity ──> Ranked Recommendations
-                                    │
-                                    ▼
-                            Streamlit UI
+                       ┌──────────────┘
+                       ▼
+                Recommender
+    (TF-IDF + semantic embeddings + bandit)
+                       │
+                       ▼
+        Ranked Recommendations + Why-This explanations
 ```
 
-### Data Flow
-1. **Ingestion**: `python -m database.update_mongo` fetches TVmaze catalog pages, enriches each show with cast, and upserts into MongoDB
-2. **Model Building**: `python -m recommender.build_model` reads all series, builds a TF-IDF content soup (name + summary + weighted genres + cast + network), and saves a `.joblib` artifact
-3. **Serving**: `streamlit run streamlit_app.py` reads MongoDB for browsing and loads the `.joblib` model for recommendations
+### Data Model
+
+Each series document in the `series` collection is keyed by a unique `series_id` and stores: name, summary, genres, rating, language, premiere/end dates, status, network/web_channel, cast, and imagery. Per-user collections (`watchlist`, `likes`, `recently_viewed`, `interaction_events`) reference series by `series_id`.
 
 ---
 
@@ -64,59 +55,56 @@ TVmaze API ──> Data Ingestion ──> MongoDB
 
 ```
 BingeFinder/
-├── app.py                     # Backend entry point (TVmaze -> MongoDB sync)
-├── streamlit_app.py           # Streamlit UI entry point (page router)
-├── config.py                  # Centralized configuration (env vars, paths)
-├── requirements.txt           # Python dependencies
-├── .env.example               # Environment variable template
-│
+├── backend/                  # FastAPI application
+│   ├── main.py               # App entry point (CORS, routers, lifecycle)
+│   ├── routes/               # API route handlers
+│   ├── schemas/              # Pydantic request/response models
+│   └── services/             # Business logic (discovery, recs, provider, etc.)
 ├── api/
-│   ├── tvmaze.py              # TVmaze API client (ACTIVE)
-│   ├── tmdb.py                # TMDb API client (for watch providers)
-│   └── watch_providers.py     # Watch provider lookup + JustWatch fallback
-│
+│   ├── tmdb.py               # TMDb API client
+│   └── watch_providers.py    # Watch-provider lookup
 ├── database/
-│   ├── mongo_client.py        # MongoDB persistence (upsert, query)
-│   ├── update_mongo.py        # TVmaze -> MongoDB ingestion pipeline
-│   └── watchlist.py           # Watchlist MongoDB operations
-│
+│   ├── mongo_client.py       # MongoDB persistence layer
+│   ├── watchlist.py          # Watchlist operations
+│   ├── likes.py              # Like operations
+│   ├── recently_viewed.py    # Recently-viewed operations
+│   └── interaction_events.py # Reward/event logging for the bandit
 ├── recommender/
-│   ├── preprocess.py          # Content soup builder (TF-IDF input)
-│   ├── build_model.py         # TF-IDF model trainer
-│   ├── recommend.py           # Recommendation engine
-│   ├── exceptions.py          # Custom exception hierarchy
-│   ├── cli.py                 # CLI demo
-│   └── artifacts/             # Saved model artifacts
-│
-├── ui/
-│   ├── data_access.py         # Read-only backend wrapper (cached)
-│   ├── components.py          # CSS, cards, badges, grids, theme system
-│   ├── explain.py             # "Why this?" explanation builder
-│   └── vibes.py               # Mood picker + Surprise Me
-│
-├── utils/
-│   └── logger.py              # Centralized logging
-│
-└── tests/
-    ├── conftest.py            # pytest fixtures (mongomock)
-    ├── sample_series.py       # Sample series documents
-    └── test_recommender.py    # Full test suite
+│   ├── preprocess.py         # Content-soup builder
+│   ├── build_model.py        # TF-IDF + embeddings model trainer
+│   ├── recommend.py          # Recommendation engine
+│   ├── adaptive.py           # Adaptive ranking pipeline
+│   ├── bandit.py             # LinUCB contextual bandit
+│   ├── train_ranker.py       # Ranker training helper
+│   ├── embeddings.py         # Semantic embedding helpers
+│   └── exceptions.py         # Custom exception hierarchy
+├── frontend/                 # React 19 SPA
+│   └── src/
+│       ├── pages/            # Route pages
+│       ├── components/       # Reusable UI components
+│       ├── context/          # Auth context
+│       └── api/              # API client
+├── tests/                    # pytest suite (mongomock)
+├── config.py                 # Central configuration
+└── requirements.txt          # Python dependencies
 ```
 
 ---
 
 ## ML Approach
 
-**Content-Based Filtering using TF-IDF + Cosine Similarity**
+**Content-Based Filtering using TF-IDF + Semantic Embeddings + Cosine Similarity**
 
 For each series, a "content soup" is built from:
 - **Series name** — title included as a primary identifier
 - **Summary** — the full synopsis (primary signal)
 - **Genres** — repeated 3x for heavier TF-IDF weight
-- **Cast names** — top 5 billed actors (collapsed to single tokens)
+- **Cast names** — top billed actors (limited count)
 - **Network/Channel** — broadcaster or streaming platform name
 
-The `TfidfVectorizer` (max_features=20000, English stop words) converts these soups into a sparse matrix. Cosine similarity compares every series against the query series, and the top-N most similar results are returned ranked by genuine similarity score (0.0 to 1.0).
+The `TfidfVectorizer` (max_features=20000, English stop words) converts these soups into a sparse matrix, and a sentence-transformer model produces dense semantic embeddings. A weighted combination of cosine similarities scores every series against the query, and the top-N results are returned ranked by genuine relevance score (0.0 to 1.0).
+
+**Personalization + Adaptive Ranking** — A user's likes, watchlist, and recently-viewed history are weighted (3.0 / 2.0 / 1.0) into a combined preference vector. Candidate recommendations are then reranked by a **LinUCB contextual bandit** trained on interaction events, so the system continuously adapts to what the user actually engages with.
 
 ---
 
@@ -126,10 +114,7 @@ The `TfidfVectorizer` (max_features=20000, English stop words) converts these so
 2. The local MongoDB catalog is filtered with exact-match priority
 3. If an exact match exists, it appears first
 4. If only partial matches exist, they're shown with a notice
-5. A "Search TVmaze" button appears when no local match is found
-6. TVmaze results are ranked: exact title > starts-with > partial
-7. For ambiguous titles (e.g. "Money Heist"), multiple candidates are shown for user selection
-8. Selected series is stored via the existing upsert logic (never duplicated)
+5. Results are ranked: exact title > starts-with > contains (so "Money Heist" always surfaces above "Money Heist: Korea")
 
 ---
 
@@ -155,7 +140,7 @@ cd BingeFinder
 python -m venv .venv
 source .venv/bin/activate  # Windows: .venv\Scripts\activate
 
-# Install dependencies
+# Install Python dependencies
 pip install -r requirements.txt
 
 # Configure environment
@@ -170,77 +155,68 @@ cp .env.example .env
 | `MONGODB_URI` | Yes | — | MongoDB connection URI |
 | `MONGODB_DATABASE` | Yes | — | MongoDB database name |
 | `TMDB_API_KEY` | Yes | — | TMDb API key (for watch providers) |
-| `TVMAZE_SYNC_PAGES` | No | 15 | Catalog pages to fetch (~250 shows/page) |
-| `TVMAZE_CAST_LIMIT` | No | 10 | Max cast members per show |
 | `LOG_LEVEL` | No | INFO | Logging verbosity |
+| `JWT_SECRET` | No | auto-gen | Secret for session tokens |
 
 ---
 
 ## How to Run
 
+### 1. MongoDB
+
+Start MongoDB (local default `mongodb://127.0.0.1:27017/`). The `series`, `watchlist`, `likes`, `recently_viewed`, and `interaction_events` collections live in the configured database.
+
+### 2. Backend
+
 ```bash
-# 1. Sync series data from TVmaze into MongoDB
-python -m database.update_mongo
-
-# 2. Build the recommendation model
-python -m recommender.build_model
-
-# 3. Launch the Streamlit app
-streamlit run streamlit_app.py
+uvicorn backend.main:app --reload --port 8000
 ```
 
-The app opens at `http://localhost:8501`.
+The API runs at `http://localhost:8000` (docs at `/docs`).
+
+### 3. Frontend
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+The SPA runs at `http://localhost:5173` and proxies API calls to the backend.
 
 ---
 
 ## Testing
 
 ```bash
+# Backend
 pytest tests/ -v
+
+# Frontend
+cd frontend && npm run build
 ```
 
 Tests use `mongomock` (in-memory MongoDB) — no live database required.
 
 ---
 
-## Analytics
+## Model Building
 
-The Analytics page provides interactive Plotly visualizations:
-- Total series count
-- Genre distribution (top 15)
-- Rating distribution (histogram)
-- Language distribution (top 10)
-- Series by premiere year
-- Status distribution (donut chart)
-- Network/channel distribution (top 15)
-- Average rating by genre
+Rebuild the recommendation model (TF-IDF + semantic embeddings) against the current catalog:
 
-All charts operate on real MongoDB data and handle missing data gracefully.
-
----
-
-## How to Deploy
-
-### Streamlit Cloud
-1. Push to GitHub
-2. Go to [share.streamlit.io](https://share.streamlit.io)
-3. Select the repository and `streamlit_app.py` as the main file
-4. Add environment variables in Streamlit's secrets management
-
-### Manual
 ```bash
-streamlit run streamlit_app.py --server.port 8501 --server.address 0.0.0.0
+python -m recommender.build_model
 ```
+
+The model artifact is saved to `recommender/artifacts/` and auto-loads at API startup (auto-rebuilt if stale via `REBUILD_MODEL_TTL_HOURS`).
 
 ---
 
 ## Future Improvements
 
-- User authentication for shared watchlists
 - Collaborative filtering alongside content-based recommendations
-- Incremental TVmaze sync (using the updates endpoint)
 - More granular watch-provider data (season/episode availability)
-- Mobile-optimized responsive layout
+- Mobile-optimized responsive layout improvements
 - Export watchlist functionality
 
 ---

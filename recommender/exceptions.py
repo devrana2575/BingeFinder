@@ -32,5 +32,5 @@ class SeriesNotFoundError(RecommenderError):
     """
     Raised by get_recommendations() when the given series_id does not
     exist in the currently loaded model (e.g. an invalid/unknown
-    tvmaze_id).
+    series_id).
     """

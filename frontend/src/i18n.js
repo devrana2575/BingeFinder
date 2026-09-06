@@ -98,10 +98,12 @@ const LOCALE_EN = {
 
   'card.viewDetails': 'View Details',
   'card.noPoster': 'No poster available',
+  'card.untitled': 'Untitled',
   'card.match': '{score}% match',
   'card.free': 'FREE',
   'card.freeWithAds': 'FREE WITH ADS',
   'card.freeOn': 'Free: {names}',
+  'card.onServices': 'On {names}',
 
   'detail.watchProviderTitle': 'Where to Watch',
   'detail.watchProviderLoading': 'Loading watch availability...',

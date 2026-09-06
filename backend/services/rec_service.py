@@ -91,10 +91,18 @@ def get_personalized_recommendations(
         return [], err
 
     weighted_ids: Dict[int, float] = {}
+    service_ids: List[int] = []
     try:
         from database.watchlist import WatchlistManager
         from database.likes import LikesManager
         from database.recently_viewed import RecentlyViewedManager
+        from database.users import UserManager
+
+        preferences = UserManager(manager).get_preferences(user_id) or {}
+        service_ids = [
+            int(s) for s in (preferences.get("services") or [])
+            if isinstance(s, int) or str(s).isdigit()
+        ]
 
         wl = WatchlistManager(manager)
         for doc in wl.get_watchlist(user_id):
@@ -228,7 +236,57 @@ def get_personalized_recommendations(
     except Exception as exc:
         logger.warning("Adaptive reranking failed, using baseline: %s", exc)
 
+    # --- "Available on your services" prioritization ---
+    # Requires real provider data; without it (unconfigured key / service
+    # outage) the ranking is left untouched so nothing is ever claimed or
+    # fabricated. Only when availability lookups actually succeed do matched
+    # series surface first, keeping their relative relevance order.
+    if service_ids:
+        matches, got_signal = _get_service_matches(
+            [c["series_id"] for c in candidates], service_ids, region=region
+        )
+        if got_signal and matches:
+            for c in candidates:
+                c["_my_services"] = matches.get(c["series_id"])
+            candidates.sort(key=lambda c: 0 if c.get("_my_services") else 1)
+
     return candidates[:top_n], None
+
+
+def _get_service_matches(
+    series_ids: List[int], selected_services: List[int], region: Optional[str] = None
+) -> Tuple[Dict[int, List[str]], bool]:
+    """Map series to the user's selected services via genuine provider data.
+
+    Returns (matches, got_signal): `got_signal` is True only when at least one
+    availability lookup really succeeded (i.e. the data source is configured).
+    A failed/absent lookup never yields a match, so the re-ranking stays a no-op
+    when provider data is unavailable.
+    """
+    matches: Dict[int, List[str]] = {}
+    got_signal = False
+    try:
+        from backend.services.watch_provider_cache import _cached_watch_providers
+        for sid in series_ids[:10]:
+            try:
+                providers = _cached_watch_providers(sid, None, "", None, region=region)
+            except Exception:
+                providers = None
+            if not providers or providers.get("error") or not providers.get("providers"):
+                continue
+            got_signal = True
+            id_to_name: Dict[int, str] = {}
+            for items in providers["providers"].values():
+                for p in items or []:
+                    pid = p.get("provider_id")
+                    if pid is not None:
+                        id_to_name[int(pid)] = p.get("provider_name") or "Service"
+            hit_names = [id_to_name[s] for s in selected_services if s in id_to_name]
+            if hit_names:
+                matches[sid] = hit_names
+    except Exception:
+        return {}, False
+    return matches, got_signal
 
 
 def _get_reward_matrix(user_id: str) -> List[Dict[str, Any]]:

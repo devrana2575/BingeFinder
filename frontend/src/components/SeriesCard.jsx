@@ -2,14 +2,16 @@ import { Link } from 'react-router-dom';
 import PosterImage from './PosterImage';
 import RatingBadge from './RatingBadge';
 import GenreTags from './GenreTags';
+import { t } from '../i18n';
 
 export default function SeriesCard({ series, relevanceScore, showFreeHint }) {
   const id = series.series_id;
-  const title = series.name || 'Untitled';
+  const title = series.name || t('card.untitled');
   const year = series.premiered ? series.premiered.slice(0, 4) : null;
   const score = relevanceScore ?? series.relevance_score;
   const freeTier = series.free_tier;
   const freeNames = series.free_provider_names || [];
+  const myServices = series._my_services || series.my_services || [];
 
   return (
     <div className="group bg-surface border border-border rounded-xl overflow-hidden flex flex-col transition-colors duration-150 hover:border-border-hover">
@@ -21,12 +23,12 @@ export default function SeriesCard({ series, relevanceScore, showFreeHint }) {
               freeTier === 'free' ? 'bg-free text-bg' : 'bg-accent text-bg'
             }`}
           >
-            {freeTier === 'free' ? 'FREE' : 'FREE WITH ADS'}
+            {freeTier === 'free' ? t('card.free') : t('card.freeWithAds')}
           </span>
         )}
         {showFreeHint && freeTier == null && freeNames.length > 0 && (
           <span className="absolute top-2 left-2 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-free text-bg">
-            FREE
+            {t('card.free')}
           </span>
         )}
       </Link>
@@ -42,14 +44,20 @@ export default function SeriesCard({ series, relevanceScore, showFreeHint }) {
           <RatingBadge rating={series.rating} />
           {score != null && (
             <span className="text-xs font-semibold text-accent">
-              {Math.round(score * 100)}% match
+              {t('card.match', { score: Math.round(score * 100) })}
             </span>
           )}
         </div>
 
         {showFreeHint && freeNames.length > 0 && (
           <span className="text-xs text-free font-medium mb-2">
-            Free: {freeNames.join(', ')}
+            {t('card.freeOn', { names: freeNames.join(', ') })}
+          </span>
+        )}
+
+        {myServices.length > 0 && (
+          <span className="text-xs font-semibold text-accent mb-2">
+            {t('card.onServices', { names: myServices.join(', ') })}
           </span>
         )}
 
@@ -62,7 +70,7 @@ export default function SeriesCard({ series, relevanceScore, showFreeHint }) {
             to={`/series/${id}`}
             className="block w-full text-center py-2 rounded-lg text-sm font-semibold text-text-secondary border border-border hover:border-accent hover:text-accent transition-colors"
           >
-            View Details
+            {t('card.viewDetails')}
           </Link>
         </div>
       </div>

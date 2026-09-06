@@ -26,9 +26,13 @@ def _cached_watch_providers(
     imdb_id: Optional[str],
     series_name: str,
     premiered: Optional[str],
+    region: Optional[str] = None,
 ) -> dict:
     """Cached wrapper around get_watch_providers_for_series."""
-    key = (series_id, imdb_id, series_name, premiered)
+    from regions import normalize_region
+    effective_region = normalize_region(region)
+
+    key = (series_id, imdb_id, series_name, premiered, effective_region)
     now = time.time()
 
     with _lock:
@@ -40,7 +44,8 @@ def _cached_watch_providers(
     try:
         from api.watch_providers import get_watch_providers_for_series
         result = get_watch_providers_for_series(
-            series_id, imdb_id=imdb_id, series_name=series_name, premiered=premiered
+            series_id, imdb_id=imdb_id, series_name=series_name, premiered=premiered,
+            region=effective_region,
         ) or {}
     except Exception:
         result = {}

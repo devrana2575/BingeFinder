@@ -18,6 +18,9 @@ class SeriesSummary(BaseModel):
     language: Optional[str] = None
     premiered: Optional[str] = None
     status: Optional[str] = None
+    # Free-availability hint for the "Free Tonight" rail (product-level only).
+    free_tier: Optional[str] = None
+    free_provider_names: List[str] = []
 
 
 class SeriesDetail(BaseModel):

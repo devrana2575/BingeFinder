@@ -1,6 +1,6 @@
 import SeriesCard from './SeriesCard';
 
-export default function SeriesGrid({ series, relevanceScores, showFreeHint, emptyMessage }) {
+export default function SeriesGrid({ series, relevanceScores, showFreeHint }) {
   if (!series || series.length === 0) {
     return null;
   }

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { t } from '../i18n';
 
 export default function LoginPage() {
   const { login } = useAuth();
@@ -56,13 +57,13 @@ export default function LoginPage() {
           </div>
         </div>
         <button type="submit" disabled={loading}
-                className="btn-primary w-full" disabled={loading}>
-          {loading ? 'Signing in...' : 'Sign In'}
+                className="btn-primary w-full">
+          {loading ? 'Signing in...' : t('auth.login')}
         </button>
       </form>
 
       <p className="text-center text-sm text-text-muted mt-6">
-        Don't have an account? <Link to="/signup" className="text-accent hover:underline">Sign up</Link>
+        Don't have an account? <Link to="/signup" className="text-accent hover:underline">{t('auth.signup')}</Link>
       </p>
     </div>
   );

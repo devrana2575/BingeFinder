@@ -47,11 +47,14 @@ def series_recommendations(series_id: int):
 
 
 @router.get("/recommendations/personalized", response_model=List[RecommendationItem])
-def personalized_recommendations(user_id: Optional[str] = Depends(get_current_user)):
+def personalized_recommendations(
+    user_id: Optional[str] = Depends(get_current_user),
+    region: Optional[str] = None,
+):
     if not user_id:
         raise HTTPException(status_code=401, detail="Login required for personalized recommendations.")
 
-    recs, err = rec_service.get_personalized_recommendations(user_id)
+    recs, err = rec_service.get_personalized_recommendations(user_id, region=region)
     if err:
         raise HTTPException(status_code=503, detail=err)
 

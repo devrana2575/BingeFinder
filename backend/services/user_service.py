@@ -181,3 +181,39 @@ def record_view(user_id: str, series_id: int) -> None:
         pass
     finally:
         manager.close()
+
+
+# ---------------------------------------------------------------------------
+# Settings / preferences
+# ---------------------------------------------------------------------------
+
+def get_settings(user_id: str) -> Tuple[Dict, Optional[str]]:
+    manager, err = _connect()
+    if err:
+        return {}, err
+    try:
+        from database.users import UserManager
+        um = UserManager(manager)
+        return um.get_preferences(user_id), None
+    except Exception as exc:
+        return {}, f"Could not load settings: {exc}"
+    finally:
+        manager.close()
+
+
+def update_settings(user_id: str, settings: Dict) -> Tuple[bool, Optional[str]]:
+    manager, err = _connect()
+    if err:
+        return False, err
+    try:
+        from database.users import UserManager
+        um = UserManager(manager)
+        # Merge: an update only touches the provided fields.
+        current = um.get_preferences(user_id)
+        current.update({k: v for k, v in settings.items() if v is not None})
+        ok = um.update_preferences(user_id, current)
+        return (True, None) if ok else (False, "User not found.")
+    except Exception as exc:
+        return False, f"Could not save settings: {exc}"
+    finally:
+        manager.close()

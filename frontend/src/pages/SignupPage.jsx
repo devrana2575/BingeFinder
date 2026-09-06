@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
+import { t } from '../i18n';
 
 export default function SignupPage() {
   const { signup } = useAuth();
@@ -84,7 +85,7 @@ export default function SignupPage() {
       </form>
 
       <p className="text-center text-sm text-text-muted mt-6">
-        Already have an account? <Link to="/login" className="text-accent hover:underline">Log in</Link>
+        Already have an account? <Link to="/login" className="text-accent hover:underline">{t('auth.login')}</Link>
       </p>
     </div>
   );

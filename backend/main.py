@@ -15,12 +15,13 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 from backend.middleware.cors import get_allowed_origins
 from backend.middleware.security_headers import SecurityHeadersMiddleware
-from backend.routes import auth, series, recommendations, discovery, watch_providers, users, events
+from backend.routes import auth, series, recommendations, discovery, watch_providers, users, events, regions
 
 
 @asynccontextmanager
@@ -68,8 +69,26 @@ app.include_router(series.router, prefix="/api/series", tags=["series"])
 app.include_router(recommendations.router, prefix="/api", tags=["recommendations"])
 app.include_router(discovery.router, prefix="/api/discover", tags=["discovery"])
 app.include_router(watch_providers.router, prefix="/api/series", tags=["watch-providers"])
+app.include_router(watch_providers.provider_list_router, prefix="/api/watch-providers", tags=["watch-providers"])
 app.include_router(users.router, prefix="/api/user", tags=["user"])
 app.include_router(events.router, prefix="/api/events", tags=["events"])
+app.include_router(regions.router, prefix="/api", tags=["regions"])
+
+
+@app.exception_handler(Exception)
+async def unhandled_exception_handler(request: Request, exc: Exception):
+    """Catch-all so unexpected errors never leak internals to the client.
+
+    The error is logged server-side with the path for diagnosis; the client
+    receives a clean, generic JSON message with 500.
+    """
+    from utils.logger import get_logger
+    logger = get_logger("backend.main")
+    logger.exception("Unhandled error on %s %s", request.method, request.url.path)
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Something went wrong on our end. Please try again."},
+    )
 
 
 @app.get("/api/health")

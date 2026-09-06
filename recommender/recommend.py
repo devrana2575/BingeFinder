@@ -65,6 +65,47 @@ RECOMMENDATION_ELBOW_FACTOR = float(_os.getenv("RECOMMENDATION_ELBOW_FACTOR", "0
 # Legacy alias kept for backwards-compat with imports (rec_service, tests).
 RELEVANCE_FLOOR = MIN_RECOMMENDATION_SCORE
 
+# ---------------------------------------------------------------------------
+# Match-score calibration
+# ---------------------------------------------------------------------------
+# The raw hybrid score is a (0.50/0.20/0.20/0.10) weighted sum of similarity
+# components. The two CONTENT signals (semantic embeddings and TF-IDF) are
+# measured on a heavily compressed scale — measured across the real
+# 3,534-series catalog:
+#     semantic cosine: median 0.146, p95 0.328, MAX 0.587
+#     tfidf cosine:    median 0.006, p95 0.059, MAX 0.227
+# so even the single most-similar pair in the whole catalog scores only
+# ~0.59 semantic. Because of this, the raw hybrid can NEVER exceed:
+#     W_SEMANTIC*0.587 + W_TFIDF*0.227 + W_GENRE*1.0 + W_QUALITY*1.0 ~ 0.64
+# Displaying that raw number as a "% match" makes even excellent matches look
+# like 50-60%. That is the whole cause of the "low-looking" scores.
+#
+# Calibration: normalise the raw hybrid by its achievable maximum so that a
+# real strong match maps onto the higher part of the 0-100 scale.
+#     calibrated = min(1.0, raw_relevance / MAX_ACHIEVABLE)
+# This is a MIN-MAX style calibration against the achievable range. It is
+#   - monotonic: dividing by a positive constant preserves the exact ranking
+#     (a stronger candidate always shows a >= match % than a weaker one),
+#   - bounded to [0, 1] ("100%" == a genuinely maximum-strength match), and
+#   - data-derived: the ceiling comes from the measured catalog distribution,
+#     not an arbitrary "+30" / "x1.5" fudge.
+SEMANTIC_CEILING = 0.587   # measured max semantic-cosine across the catalog
+TFIDF_CEILING = 0.227      # measured max tfidf-cosine across the catalog
+_MAX_ACHIEVABLE = (
+    W_SEMANTIC * SEMANTIC_CEILING
+    + W_TFIDF * TFIDF_CEILING
+    + W_GENRE * 1.0
+    + W_QUALITY * 1.0
+)
+
+
+def calibrate_score(raw_relevance: float) -> float:
+    """Map a raw hybrid relevance score onto a bounded, ranking-preserving
+    match percentage (0-1) using the achievable-range calibration above."""
+    if raw_relevance <= 0.0:
+        return 0.0
+    return min(1.0, raw_relevance / _MAX_ACHIEVABLE)
+
 # Diversity: max recommendations from the same genre cluster or network.
 _MAX_PER_GENRE = 3
 _MAX_PER_NETWORK = 2
@@ -421,7 +462,8 @@ def get_recommendations(
     # --- Build results ---
     recommendations: List[Dict[str, Any]] = []
     for idx in diverse_indices:
-        score = float(hybrid[idx])
+        raw_score = float(hybrid[idx])
+        score = calibrate_score(raw_score)
 
         row = candidate_rows[idx]
         candidate_id = series_ids[row]

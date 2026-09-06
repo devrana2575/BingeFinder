@@ -4,9 +4,21 @@ backend/services/series_service.py
 Wraps MongoDBManager for series queries.
 """
 
+import re
+from difflib import SequenceMatcher
 from typing import Any, Dict, List, Optional, Tuple
 
 from database.mongo_client import MongoDBManager
+
+
+def _norm(value: str) -> str:
+    """Normalize a title for matching (lowercase, alphanumeric words only)."""
+    return re.sub(r"[^a-z0-9]+", " ", (value or "").lower()).strip()
+
+
+def _tokens(value: str) -> List[str]:
+    """Split a normalized title into tokens."""
+    return _norm(value).split()
 
 
 def _connect() -> Tuple[MongoDBManager, None] | Tuple[None, str]:
@@ -72,16 +84,45 @@ def search_series(
     """Filter in-memory catalog.
 
     Supports filters (query, genres, min_rating, language, year, status) and,
-    when a query is present, the returned results are ranked by title match
-    priority: exact match first, then prefix match, then contains, ordering
-    shorter titles earlier within the same tier.
+    when a query is present, ranks by title-match tier:
+
+        0. Normalized exact name/original-title match
+        1. Prefix match (title starts with the query)
+        2. Every query token prefix-matches a title token
+        3. Contains match
+        4. Fuzzy substring match (kept only when nothing stronger matches)
+
+    Tier 0/1/2 are decided on EITHER the display name or the original
+    (often non-English) title, e.g. searching "money heist" must also
+    surface "La Casa de Papel". Within a tier, shorter titles rank first
+    so "Money Heist" outranks its longer spin-off.
     """
     query = (query or "").strip().lower()
+    q_norm = _norm(query)
+    q_tokens = _tokens(query)
     results = []
     for doc in docs:
-        name_norm = (doc.get("name") or "").lower()
-        if query and query not in name_norm:
-            continue
+        name_norm = _norm(doc.get("name"))
+        orig_norm = _norm(doc.get("original_name"))
+        combined = f"{name_norm} {orig_norm}".strip()
+
+        if query:
+            exact_combined = bool(q_norm) and (name_norm == q_norm or orig_norm == q_norm)
+            contains = bool(q_norm and (q_norm in combined))
+            token_covered = False
+            if q_tokens and combined:
+                combined_tokens = combined.split()
+                token_covered = all(
+                    any(tok.startswith(qt) or qt.startswith(tok) for tok in combined_tokens)
+                    for qt in q_tokens
+                )
+            fuzzy = (
+                q_norm and name_norm and
+                (SequenceMatcher(None, q_norm, name_norm, autojunk=False).ratio() >= 0.6
+                 or SequenceMatcher(None, q_norm, orig_norm, autojunk=False).ratio() >= 0.6)
+            )
+            if not (exact_combined or contains or token_covered or fuzzy):
+                continue
         if genres:
             doc_genres = set(doc.get("genres") or [])
             if not doc_genres.intersection(genres):
@@ -103,15 +144,36 @@ def search_series(
         results.append(doc)
 
     if query:
+        def _token_coverage(field_norm: str) -> float:
+            if not q_tokens or not field_norm:
+                return 0.0
+            field_tokens = field_norm.split()
+            if not field_tokens:
+                return 0.0
+            covered = sum(
+                1 for qt in q_tokens
+                if any(tok.startswith(qt) or qt.startswith(tok) for tok in field_tokens)
+            )
+            return covered / len(q_tokens)
+
+        def _tier(name_norm: str, orig_norm: str) -> int:
+            if name_norm == q_norm or orig_norm == q_norm:
+                return 0
+            if name_norm.startswith(q_norm) or orig_norm.startswith(q_norm):
+                return 1
+            if _token_coverage(name_norm) >= 0.99 or _token_coverage(orig_norm) >= 0.99:
+                return 2
+            if q_norm in f"{name_norm} {orig_norm}":
+                return 3
+            return 4
+
         def _rank(doc):
-            name_norm = (doc.get("name") or "").lower()
-            if name_norm == query:
-                tier = 0
-            elif name_norm.startswith(query):
-                tier = 1
-            else:
-                tier = 2
-            return (tier, len(name_norm))
+            name_norm = _norm(doc.get("name"))
+            orig_norm = _norm(doc.get("original_name"))
+            tier = _tier(name_norm, orig_norm)
+            coverage = max(_token_coverage(name_norm), _token_coverage(orig_norm))
+            length = len(name_norm) if name_norm else len(orig_norm)
+            return (tier, -coverage, length)
         results.sort(key=_rank)
 
     return results

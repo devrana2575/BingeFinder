@@ -4,15 +4,18 @@ backend/routes/users.py
 GET/POST/DELETE /user/watchlist/{id}
 GET/POST/DELETE /user/likes/{id}
 GET/POST /user/recently-viewed
+GET/PUT /user/settings
 """
 
-from typing import List
+from typing import List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 
 from backend.dependencies import get_current_user, require_auth
 from backend.schemas.series import SeriesSummary
+from backend.schemas.settings import UserSettings
 from backend.services import user_service
+from api.tmdb import build_poster_url
 
 router = APIRouter()
 
@@ -23,7 +26,7 @@ def _doc_to_summary(doc: dict) -> SeriesSummary:
         name=doc.get("name") or "Untitled",
         rating=doc.get("rating"),
         genres=doc.get("genres") or [],
-        image=doc.get("image_medium") or doc.get("image_original"),
+        image=build_poster_url(doc.get("image_medium") or doc.get("image_original")),
         language=doc.get("language"),
         premiered=doc.get("premiered"),
         status=doc.get("status"),
@@ -102,3 +105,25 @@ def get_recently_viewed(user_id: str = Depends(require_auth)):
 def record_view(series_id: int, user_id: str = Depends(require_auth)):
     user_service.record_view(user_id, series_id)
     return {"status": "recorded"}
+
+
+# ---------------------------------------------------------------------------
+# Settings / preferences
+# ---------------------------------------------------------------------------
+
+@router.get("/settings")
+def get_settings(user_id: str = Depends(require_auth)):
+    settings, err = user_service.get_settings(user_id)
+    if err:
+        raise HTTPException(status_code=503, detail=err)
+    return settings
+
+
+@router.put("/settings")
+def update_settings(
+    payload: UserSettings, user_id: str = Depends(require_auth)
+):
+    ok, err = user_service.update_settings(user_id, payload.model_dump())
+    if err:
+        raise HTTPException(status_code=503, detail=err)
+    return {"status": "saved", "settings": payload.model_dump()}

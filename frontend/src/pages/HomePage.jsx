@@ -2,6 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import { useRegion } from '../context/RegionContext';
+import { t } from '../i18n';
 import SeriesGrid from '../components/SeriesGrid';
 import { SkeletonGrid } from '../components/Skeletons';
 import ErrorState from '../components/ErrorState';
@@ -10,34 +12,41 @@ import EmptyState from '../components/EmptyState';
 function HeroSection() {
   const [query, setQuery] = useState('');
   const navigate = useNavigate();
+  const [catalogTotal, setCatalogTotal] = useState(null);
+
+  useEffect(() => {
+    api.catalogCount().then(d => setCatalogTotal(d.total || 0)).catch(() => {});
+  }, []);
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (query.trim()) navigate(`/discover?q=${encodeURIComponent(query.trim())}`);
   };
 
+  const countLabel = catalogTotal != null ? catalogTotal.toLocaleString() : '3,500';
+
   return (
     <section className="rounded-2xl border border-border bg-surface p-8 sm:p-12 mb-8">
       <h1 className="text-2xl sm:text-3xl font-bold text-text mb-2" style={{ fontFamily: 'Sora, sans-serif' }}>
-        What's your next binge?
+        {t('hero.title')}
       </h1>
       <p className="text-text-muted text-sm mb-6 max-w-lg">
-        Search 3,500+ series or let us find something for you.
+        {t('hero.subtitle', { count: countLabel })}
       </p>
       <form onSubmit={handleSubmit} className="flex gap-3 max-w-lg">
-        <label htmlFor="hero-search" className="sr-only">Search for a series</label>
+        <label htmlFor="hero-search" className="sr-only">{t('hero.searchLabel')}</label>
         <input
           id="hero-search"
           type="text"
           value={query}
           onChange={e => setQuery(e.target.value)}
-          placeholder="Search for a series..."
+          placeholder={t('hero.searchPlaceholder')}
           className="flex-1 px-4 py-2.5 rounded-lg bg-bg border border-border text-text text-sm placeholder:text-text-muted focus:border-accent"
         />
-        <button type="submit" className="btn-primary">Search</button>
+        <button type="submit" className="btn-primary">{t('hero.searchButton')}</button>
       </form>
       <Link to="/surprise" className="inline-block mt-4 text-sm text-text-secondary hover:text-accent transition-colors">
-        Not sure? Try Surprise Me
+        {t('hero.surpriseLink')}
       </Link>
     </section>
   );
@@ -50,7 +59,7 @@ function MoodSlider() {
     api.vibes()
       .then(data => {
         const items = Object.entries(data).map(([key, val]) => ({
-          key, emoji: val.emoji, label: val.label,
+          key, label: val.label,
         }));
         setMoods(items);
       })
@@ -61,7 +70,7 @@ function MoodSlider() {
 
   return (
     <section className="mb-8">
-      <h2 className="text-base font-semibold text-text mb-3">Pick a mood</h2>
+      <h2 className="text-base font-semibold text-text mb-3">{t('mood.title')}</h2>
       <div className="flex gap-2 overflow-x-auto pb-2 -mx-1 px-1">
         {moods.map(m => (
           <Link
@@ -69,7 +78,7 @@ function MoodSlider() {
             to={`/discover/vibes/${m.key}`}
             className="flex-shrink-0 px-4 py-2 rounded-lg bg-surface border border-border text-sm text-text-secondary hover:border-accent hover:text-accent transition-colors whitespace-nowrap"
           >
-            {m.emoji} {m.label}
+            {m.label}
           </Link>
         ))}
       </div>
@@ -85,7 +94,7 @@ function SectionHeader({ title, subtitle, linkTo, linkText }) {
         {subtitle && <p className="text-xs text-text-muted mt-0.5">{subtitle}</p>}
       </div>
       {linkTo && (
-        <Link to={linkTo} className="text-xs text-accent hover:underline flex-shrink-0">{linkText || 'View all'}</Link>
+        <Link to={linkTo} className="text-xs text-accent hover:underline flex-shrink-0">{linkText || t('section.viewAll')}</Link>
       )}
     </div>
   );
@@ -93,10 +102,12 @@ function SectionHeader({ title, subtitle, linkTo, linkText }) {
 
 export default function HomePage() {
   const { isAuth } = useAuth();
-  const [tonight, setTonight] = useState(null);
+  const { region } = useRegion();
+  const [trending, setTrending] = useState(null);
   const [gems, setGems] = useState(null);
   const [recs, setRecs] = useState(null);
   const [freeTonight, setFreeTonight] = useState(null);
+  const [newNoteworthy, setNewNoteworthy] = useState(null);
   const [error, setError] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -104,23 +115,25 @@ export default function HomePage() {
     setLoading(true);
     setError(null);
     const tasks = [
-      api.tonightsBinge().catch(e => { console.error(e); return []; }),
+      api.trending().catch(e => { console.error(e); return []; }),
       api.hiddenGems().catch(e => { console.error(e); return []; }),
-      api.freeTonight().catch(e => { console.error(e); return []; }),
+      api.freeTonight(region).catch(e => { console.error(e); return []; }),
+      api.newNoteworthy().catch(e => { console.error(e); return []; }),
     ];
     if (isAuth) {
-      tasks.push(api.personalizedRecs().catch(() => null));
+      tasks.push(api.personalizedRecs(region).catch(() => null));
     }
     Promise.all(tasks)
       .then(results => {
-        setTonight(results[0]);
+        setTrending(results[0]);
         setGems(results[1]);
         setFreeTonight(results[2]);
-        if (isAuth) setRecs(results[3]);
+        setNewNoteworthy(results[3]);
+        if (isAuth) setRecs(results[4]);
       })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
-  }, [isAuth]);
+  }, [isAuth, region]);
 
   useEffect(load, [load]);
 
@@ -139,26 +152,27 @@ export default function HomePage() {
 
   if (error) return <ErrorState message={error} onRetry={load} />;
 
-  const hasTonight = tonight?.length > 0;
+  const hasTrending = trending?.length > 0;
   const hasGems = gems?.length > 0;
   const hasRecs = recs?.length > 0;
   const hasFreeTonight = freeTonight?.length > 0;
+  const hasNewNoteworthy = newNoteworthy?.length > 0;
 
   return (
     <div>
       <HeroSection />
       <MoodSlider />
 
-      {hasTonight && (
+      {hasTrending && (
         <section className="mb-8">
-          <SectionHeader title="Tonight's Binge" subtitle="Fresh picks for your next binge" />
-          <SeriesGrid series={tonight} />
+          <SectionHeader title={t('home.trending')} subtitle={t('home.trendingSub')} />
+          <SeriesGrid series={trending} />
         </section>
       )}
 
       {isAuth && hasRecs && (
         <section className="mb-8">
-          <SectionHeader title="Recommended For You" subtitle="Based on your history" linkTo="/for-you" />
+          <SectionHeader title={t('home.recommendedForYou')} subtitle={t('home.recommendedForYouSub')} linkTo="/for-you" />
           <SeriesGrid
             series={recs}
             relevanceScores={Object.fromEntries(recs.map(r => [r.series_id, r.relevance_score]))}
@@ -169,23 +183,30 @@ export default function HomePage() {
       {isAuth && !hasRecs && (
         <section className="mb-8">
           <EmptyState
-            title="Personalized picks are coming"
-            message="Keep exploring and we'll learn what you like."
+            title={t('home.personalizedComing')}
+            message={t('home.personalizedComingMsg')}
           />
         </section>
       )}
 
       {hasGems && (
         <section className="mb-8">
-          <SectionHeader title="Hidden Gems" subtitle="Less obvious, highly rated" linkTo="/discover" linkText="Discover more" />
+          <SectionHeader title={t('home.hiddenGems')} subtitle={t('home.hiddenGemsSub')} linkTo="/discover" linkText={t('section.discoverMore')} />
           <SeriesGrid series={gems} />
+        </section>
+      )}
+
+      {hasNewNoteworthy && (
+        <section className="mb-8">
+          <SectionHeader title={t('home.newNoteworthy')} subtitle={t('home.newNoteworthySub')} />
+          <SeriesGrid series={newNoteworthy} />
         </section>
       )}
 
       {hasFreeTonight && (
         <section className="mb-8">
-          <SectionHeader title="Free Tonight" subtitle="Stream free in India right now" linkTo="/discover" linkText="View all" />
-          <SeriesGrid series={freeTonight} />
+          <SectionHeader title={t('home.freeTonight')} subtitle={t('home.freeTonightSub')} linkTo="/discover" linkText={t('section.viewAll')} />
+          <SeriesGrid series={freeTonight} showFreeHint />
         </section>
       )}
     </div>

@@ -1,153 +1,21 @@
 import { useState, useEffect, useCallback } from 'react';
-import { useParams, Link, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
+import { useRegion } from '../context/RegionContext';
+import { t } from '../i18n';
 import PosterImage from '../components/PosterImage';
 import RatingBadge from '../components/RatingBadge';
 import GenreTags from '../components/GenreTags';
 import SeriesGrid from '../components/SeriesGrid';
+import ProviderSection from '../components/ProviderSection';
 import { SkeletonText } from '../components/Skeletons';
 import ErrorState from '../components/ErrorState';
-
-function ProviderSection({ providers, justwatchUrl, watchNowUrl, region, seriesId, tmdbConfigured }) {
-  const [showPaid, setShowPaid] = useState(false);
-
-  const regionLabel = (region || 'IN').toUpperCase();
-
-  if (tmdbConfigured === false) {
-    return (
-      <section className="rounded-xl border border-border bg-surface p-5 mb-8">
-        <h2 className="text-base font-semibold text-text mb-3">Where to Watch</h2>
-        <p className="text-sm text-text-muted">
-          Watch availability is currently unavailable. Configure a TMDB API key to see streaming providers.
-        </p>
-        {justwatchUrl && (
-          <a href={justwatchUrl} target="_blank" rel="noopener noreferrer"
-             className="inline-block mt-2 text-xs text-accent hover:underline">
-            Check availability on JustWatch
-          </a>
-        )}
-      </section>
-    );
-  }
-
-  if (!providers) {
-    return (
-      <section className="rounded-xl border border-border bg-surface p-5 mb-8">
-        <h2 className="text-base font-semibold text-text mb-3">Where to Watch</h2>
-        <p className="text-sm text-text-muted">Loading watch availability...</p>
-      </section>
-    );
-  }
-
-  const free = providers.free || [];
-  const ads = providers.ads || [];
-  const flatrate = providers.flatrate || [];
-  const rent = providers.rent || [];
-  const buy = providers.buy || [];
-  const freeAll = [...free, ...ads];
-  const hasPaid = flatrate.length > 0 || rent.length > 0 || buy.length > 0;
-  const watchNowHref = watchNowUrl || justwatchUrl;
-  const watchNowLabel = watchNowUrl ? 'WATCH NOW →' : 'VIEW AVAILABILITY →';
-
-  const ProviderCard = ({ provider, tier }) => (
-    <div className="flex items-center gap-3 p-3 rounded-lg bg-surface-2 border border-border">
-      {provider.logo_path ? (
-        <img
-          src={`https://image.tmdb.org/t/p/w45${provider.logo_path}`}
-          alt={provider.provider_name}
-          className="w-8 h-8 rounded"
-        />
-      ) : (
-        <div className="w-8 h-8 rounded bg-surface-3 flex items-center justify-center text-xs text-text-muted">
-          {provider.provider_name?.charAt(0)}
-        </div>
-      )}
-      <div className="flex-1 min-w-0">
-        <div className="text-sm font-medium text-text truncate">{provider.provider_name}</div>
-        <div className="text-xs text-text-muted">{tier}</div>
-      </div>
-      {watchNowHref && (
-        <a
-          href={watchNowHref}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={() => {
-            if (seriesId) api.recordEvent({ series_id: seriesId, event_type: 'provider_click' }).catch(() => {});
-          }}
-          className="flex-shrink-0 text-xs font-semibold text-accent hover:underline whitespace-nowrap"
-        >
-          {watchNowLabel}
-        </a>
-      )}
-    </div>
-  );
-
-  return (
-    <section className="rounded-xl border border-border bg-surface p-5 mb-8">
-      <div className="flex items-baseline justify-between mb-4">
-        <h2 className="text-base font-semibold text-text">Where to Watch</h2>
-        <span className="text-xs text-text-muted">{regionLabel}</span>
-      </div>
-
-      {freeAll.length > 0 ? (
-        <div className="mb-4">
-          <div className="flex items-center gap-2 mb-3">
-            <span className="text-xs font-bold text-free uppercase tracking-wider">Free to Watch</span>
-          </div>
-          <div className="space-y-2">
-            {freeAll.map(p => (
-              <ProviderCard
-                key={p.provider_name}
-                provider={p}
-                tier={free.some(f => f.provider_name === p.provider_name) ? 'Free' : 'Free with Ads'}
-              />
-            ))}
-          </div>
-        </div>
-      ) : (
-        <p className="text-sm text-text-muted mb-4">
-          No verified free streaming option currently available in India.
-        </p>
-      )}
-
-      {hasPaid && (
-        <div>
-          <button
-            onClick={() => setShowPaid(!showPaid)}
-            className="text-xs text-text-secondary hover:text-accent transition-colors mb-2 flex items-center gap-1"
-          >
-            Other ways to watch (subscription, rent or buy)
-            <span className={`text-[10px] transition-transform ${showPaid ? 'rotate-90' : ''}`}>&#9654;</span>
-          </button>
-          {showPaid && (
-            <div className="space-y-2 mt-2">
-              {flatrate.map(p => (
-                <ProviderCard key={`sub-${p.provider_name}`} provider={p} tier="Subscription" />
-              ))}
-              {rent.map(p => (
-                <ProviderCard key={`rent-${p.provider_name}`} provider={p} tier="Rent" />
-              ))}
-              {buy.map(p => (
-                <ProviderCard key={`buy-${p.provider_name}`} provider={p} tier="Buy" />
-              ))}
-            </div>
-          )}
-        </div>
-      )}
-
-      {!freeAll.length && !hasPaid && (
-        <p className="text-sm text-text-muted">
-          No legal watch options found for this region.
-        </p>
-      )}
-    </section>
-  );
-}
 
 export default function SeriesDetailPage() {
   const { id } = useParams();
   const { isAuth } = useAuth();
+  const { region } = useRegion();
   const navigate = useNavigate();
 
   const [series, setSeries] = useState(null);
@@ -168,7 +36,7 @@ export default function SeriesDetailPage() {
     const tasks = [
       api.getSeries(id),
       api.seriesRecs(id).catch(() => null),
-      api.watchProviders(id).catch(() => null),
+      api.watchProviders(id, region).catch(() => null),
     ];
 
     Promise.all(tasks)
@@ -183,7 +51,7 @@ export default function SeriesDetailPage() {
       })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
-  }, [id]);
+  }, [id, region]);
 
   useEffect(load, [load]);
 
@@ -209,7 +77,7 @@ export default function SeriesDetailPage() {
         await api.addWatchlist(series.series_id);
         api.recordEvent({ series_id: series.series_id, event_type: 'watchlist_add' }).catch(() => {});
       }
-    } catch (e) {
+    } catch {
       setInWatchlist(prev);
     }
   };
@@ -226,7 +94,7 @@ export default function SeriesDetailPage() {
         await api.like(series.series_id);
         api.recordEvent({ series_id: series.series_id, event_type: 'like' }).catch(() => {});
       }
-    } catch (e) {
+    } catch {
       setIsLiked(prev);
     }
   };
@@ -247,7 +115,7 @@ export default function SeriesDetailPage() {
   }
 
   if (error) return <ErrorState message={error} onRetry={load} />;
-  if (!series) return <ErrorState message="Series not found." />;
+  if (!series) return <ErrorState message={t('detail.seriesNotFound')} />;
 
   return (
     <div>
@@ -290,14 +158,14 @@ export default function SeriesDetailPage() {
               className={`btn-ghost ${inWatchlist ? '!border-accent !text-accent !bg-accent/10' : ''}`}
               aria-pressed={inWatchlist}
             >
-              {inWatchlist ? 'In Watchlist' : '+ Watchlist'}
+              {inWatchlist ? t('detail.inWatchlist') : t('detail.addWatchlist')}
             </button>
             <button
               onClick={toggleLike}
               className={`btn-ghost ${isLiked ? '!border-success !text-success !bg-success/10' : ''}`}
               aria-pressed={isLiked}
             >
-              {isLiked ? 'Liked' : 'Like'}
+              {isLiked ? t('detail.liked') : t('detail.like')}
             </button>
           </div>
         </div>
@@ -305,7 +173,7 @@ export default function SeriesDetailPage() {
 
       {recs?.why_recommended?.length > 0 && (
         <section className="mb-8 rounded-xl border border-border bg-surface p-5">
-          <h2 className="text-base font-semibold text-text mb-2">Why you might like it</h2>
+          <h2 className="text-base font-semibold text-text mb-2">{t('detail.whyRecommendedTitle')}</h2>
           <ul className="space-y-1">
             {recs.why_recommended.map((reason, i) => (
               <li key={i} className="text-sm text-text-secondary flex items-start gap-2">
@@ -317,11 +185,11 @@ export default function SeriesDetailPage() {
         </section>
       )}
 
-      <ProviderSection providers={providers?.providers} justwatchUrl={providers?.justwatch_url} watchNowUrl={providers?.watch_now_url} region={providers?.region} seriesId={series?.series_id} tmdbConfigured={providers?.tmdb_configured} />
+      <ProviderSection providers={providers?.providers} justwatchUrl={providers?.justwatch_url} watchNowUrl={providers?.watch_now_url} region={providers?.region} seriesId={series?.series_id} status={providers?.status} />
 
       {recs?.recommendations?.length > 0 && (
         <section className="mb-8">
-          <h2 className="text-base font-semibold text-text mb-3">You might also like</h2>
+          <h2 className="text-base font-semibold text-text mb-3">{t('detail.alsoLike')}</h2>
           <SeriesGrid
             series={recs.recommendations}
             relevanceScores={Object.fromEntries(recs.recommendations.map(r => [r.series_id, r.relevance_score]))}

@@ -46,17 +46,35 @@ export const api = {
   filterOptions: () => request('/series/filters'),
   getSeries: (id) => request(`/series/${id}`),
 
+  regions: () => request('/regions'),
+  resolveRegion: (code) => request(`/regions/${code}`),
+
   tonightsBinge: () => request('/discover/tonights-binge'),
+  trending: () => request('/discover/trending'),
+  newNoteworthy: () => request('/discover/new-noteworthy'),
   hiddenGems: () => request('/discover/hidden-gems'),
-  freeTonight: () => request('/discover/free-tonight'),
+  freeTonight: (region) => {
+    const qs = region ? `?region=${encodeURIComponent(region)}` : '';
+    return request(`/discover/free-tonight${qs}`);
+  },
   surprise: () => request('/discover/surprise'),
   vibes: () => request('/discover/vibes'),
   vibeFiltered: (key) => request(`/discover/vibes/${key}`),
 
   seriesRecs: (id) => request(`/series/${id}/recommendations`),
-  personalizedRecs: () => request('/recommendations/personalized'),
+  personalizedRecs: (region) => {
+    const qs = region ? `?region=${encodeURIComponent(region)}` : '';
+    return request(`/recommendations/personalized${qs}`);
+  },
 
-  watchProviders: (id) => request(`/series/${id}/watch-providers`),
+  watchProviders: (id, region) => {
+    const qs = region ? `?region=${encodeURIComponent(region)}` : '';
+    return request(`/series/${id}/watch-providers${qs}`);
+  },
+  availableProviders: (region) => {
+    const qs = region ? `?region=${encodeURIComponent(region)}` : '';
+    return request(`/watch-providers/available${qs}`);
+  },
 
   watchlist: () => request('/user/watchlist'),
   addWatchlist: (id) => request(`/user/watchlist/${id}`, { method: 'POST' }),
@@ -66,6 +84,9 @@ export const api = {
   unlike: (id) => request(`/user/likes/${id}`, { method: 'DELETE' }),
   recentlyViewed: () => request('/user/recently-viewed'),
   recordView: (id) => request(`/user/recently-viewed/${id}`, { method: 'POST' }),
+
+  getSettings: () => request('/user/settings'),
+  updateSettings: (data) => request('/user/settings', { method: 'PUT', body: JSON.stringify(data) }),
 
   // Events (adaptive ranking feedback)
   recordEvent: (data) => request('/events/recommendation', { method: 'POST', body: JSON.stringify(data) }),

@@ -8,11 +8,27 @@ export default function SeriesCard({ series, relevanceScore, showFreeHint }) {
   const title = series.name || 'Untitled';
   const year = series.premiered ? series.premiered.slice(0, 4) : null;
   const score = relevanceScore ?? series.relevance_score;
+  const freeTier = series.free_tier;
+  const freeNames = series.free_provider_names || [];
 
   return (
     <div className="group bg-surface border border-border rounded-xl overflow-hidden flex flex-col transition-colors duration-150 hover:border-border-hover">
       <Link to={`/series/${id}`} className="block relative aspect-[2/3] bg-surface-2">
         <PosterImage src={series.image} title={title} />
+        {showFreeHint && (freeTier === 'free' || freeTier === 'free_with_ads') && (
+          <span
+            className={`absolute top-2 left-2 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
+              freeTier === 'free' ? 'bg-free text-bg' : 'bg-accent text-bg'
+            }`}
+          >
+            {freeTier === 'free' ? 'FREE' : 'FREE WITH ADS'}
+          </span>
+        )}
+        {showFreeHint && freeTier == null && freeNames.length > 0 && (
+          <span className="absolute top-2 left-2 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-free text-bg">
+            FREE
+          </span>
+        )}
       </Link>
 
       <div className="p-3 flex flex-col flex-1">
@@ -31,9 +47,9 @@ export default function SeriesCard({ series, relevanceScore, showFreeHint }) {
           )}
         </div>
 
-        {showFreeHint && series._free_providers?.length > 0 && (
+        {showFreeHint && freeNames.length > 0 && (
           <span className="text-xs text-free font-medium mb-2">
-            Free: {series._free_providers.map(p => p.provider_name).join(', ')}
+            Free: {freeNames.join(', ')}
           </span>
         )}
 

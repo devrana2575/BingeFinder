@@ -166,14 +166,19 @@ def test_personalized_recommendations(seeded_mongo_manager, model_path):
 
 
 def test_personalized_recommendations_empty_history(seeded_mongo_manager, model_path):
-    """User with no activity should get empty results (not an error)."""
+    """User with no activity gets quality-driven cold-start picks (not empty)."""
     build_recommendation_model(save_path=model_path)
 
     from backend.services.rec_service import get_personalized_recommendations
     recs, err = get_personalized_recommendations("user_no_activity", top_n=5)
 
     assert err is None
-    assert len(recs) == 0
+    # Cold start: surface well-rated, diverse titles instead of an empty page.
+    assert len(recs) > 0
+    for r in recs:
+        assert "relevance_score" in r
+        assert 0.0 <= r["relevance_score"] <= 1.0
+        assert r["image"] is None or str(r["image"]).startswith("http")
 
 
 def test_personalized_recommendations_with_likes(seeded_mongo_manager, model_path):

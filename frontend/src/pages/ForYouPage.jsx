@@ -6,6 +6,7 @@ import SeriesGrid from '../components/SeriesGrid';
 import EmptyState from '../components/EmptyState';
 import { SkeletonGrid } from '../components/Skeletons';
 import ErrorState from '../components/ErrorState';
+import { t } from '../i18n';
 
 export default function ForYouPage() {
   const { isAuth } = useAuth();
@@ -28,15 +29,15 @@ export default function ForYouPage() {
 
   return (
     <div>
-      <h1 className="text-xl font-bold text-text mb-1">For You</h1>
-      <p className="text-sm text-text-muted mb-6">Personalized recommendations based on your taste</p>
+      <h1 className="text-xl font-bold text-text mb-1">{t('forYou.title')}</h1>
+      <p className="text-sm text-text-muted mb-6">{t('forYou.subtitle')}</p>
       {loading ? <SkeletonGrid /> : error ? (
         <ErrorState message={error} onRetry={load} />
       ) : (!series || series.length === 0) ? (
         <EmptyState
-          title="No recommendations yet"
-          message="Keep exploring and we'll learn what you like."
-          action={<Link to="/" className="btn-primary">Start Browsing</Link>}
+          title={t('forYou.emptyRecsTitle')}
+          message={t('forYou.emptyMsg')}
+          action={<Link to="/" className="btn-primary">{t('cta.startBrowsing')}</Link>}
         />
       ) : (
         <SeriesGrid

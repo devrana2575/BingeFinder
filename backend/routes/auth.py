@@ -48,7 +48,12 @@ def signup(body: UserCreate, _: None = Depends(_require_signup_rate_limit)):
         token = create_access_token(user["user_id"])
         return TokenResponse(
             access_token=token,
-            user=UserResponse(user_id=user["user_id"], name=user["name"], email=user["email"]),
+            user=UserResponse(
+                user_id=user["user_id"],
+                name=user["name"],
+                email=user["email"],
+                preferences=user.get("preferences") or {},
+            ),
         )
     finally:
         manager.close()
@@ -64,7 +69,12 @@ def login(body: UserLogin, _: None = Depends(_require_login_rate_limit)):
         token = create_access_token(user["user_id"])
         return TokenResponse(
             access_token=token,
-            user=UserResponse(user_id=user["user_id"], name=user["name"], email=user["email"]),
+            user=UserResponse(
+                user_id=user["user_id"],
+                name=user["name"],
+                email=user["email"],
+                preferences=user.get("preferences") or {},
+            ),
         )
     finally:
         manager.close()
@@ -80,6 +90,12 @@ def get_me(user_id: str = Depends(require_auth)):
         user = um.get_user_by_id(user_id)
         if not user:
             raise HTTPException(status_code=404, detail="User not found.")
-        return UserResponse(user_id=user["user_id"], name=user["name"], email=user["email"])
+        return UserResponse(
+            user_id=user["user_id"],
+            name=user["name"],
+            email=user["email"],
+            preferences=user.get("preferences") or {},
+            created_at=user.get("created_at"),
+        )
     finally:
         manager.close()

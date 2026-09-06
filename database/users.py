@@ -76,10 +76,9 @@ class UserManager:
     # Password helpers
     # ------------------------------------------------------------------
 
-    @staticmethod
-    def _hash_password(password: str) -> str:
-        """Hash a password with bcrypt."""
-        salt = bcrypt.gensalt(rounds=12)
+    def _hash_password(self, password: str) -> str:
+        """Hash a password with bcrypt at the configured cost rounds."""
+        salt = bcrypt.gensalt(rounds=self._bcrypt_rounds)
         return bcrypt.hashpw(password.encode("utf-8"), salt).decode("utf-8")
 
     @staticmethod
@@ -158,6 +157,7 @@ class UserManager:
             "user_id": doc["user_id"],
             "name": doc["name"],
             "email": doc["email"],
+            "preferences": doc.get("preferences") or {},
         }
 
     def get_user_by_id(self, user_id: str) -> Optional[Dict[str, Any]]:
@@ -166,7 +166,7 @@ class UserManager:
 
         Returns:
             A dict with ``user_id``, ``name``, ``email``, ``created_at``,
-            or ``None`` if not found.
+            ``preferences``, or ``None`` if not found.
         """
         try:
             doc = self._collection.find_one({"user_id": user_id})
@@ -182,4 +182,40 @@ class UserManager:
             "name": doc["name"],
             "email": doc["email"],
             "created_at": doc.get("created_at"),
+            "preferences": doc.get("preferences") or {},
         }
+
+    # ------------------------------------------------------------------
+    # Preferences / settings
+    # ------------------------------------------------------------------
+
+    def get_preferences(self, user_id: str) -> Dict[str, Any]:
+        """Return the user's stored preferences (empty dict if none)."""
+        try:
+            doc = self._collection.find_one(
+                {"user_id": user_id}, {"preferences": 1}
+            )
+        except PyMongoError as exc:
+            logger.error("Failed to look up preferences for %s: %s", user_id, exc)
+            return {}
+        if doc is None:
+            return {}
+        return doc.get("preferences") or {}
+
+    def update_preferences(
+        self, user_id: str, preferences: Dict[str, Any]
+    ) -> bool:
+        """Persist (merge) the user's preferences.
+
+        Preferences are merged field-by-field so a partial update (e.g. only
+        changing the region) never wipes out the user's language picks.
+        """
+        try:
+            result = self._collection.update_one(
+                {"user_id": user_id},
+                {"$set": {"preferences": preferences}},
+            )
+            return result.matched_count > 0
+        except PyMongoError as exc:
+            logger.error("Failed to update preferences for %s: %s", user_id, exc)
+            return False

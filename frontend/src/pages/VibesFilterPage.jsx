@@ -5,6 +5,7 @@ import SeriesGrid from '../components/SeriesGrid';
 import { SkeletonGrid } from '../components/Skeletons';
 import ErrorState from '../components/ErrorState';
 import EmptyState from '../components/EmptyState';
+import { t } from '../i18n';
 
 export default function VibesFilterPage() {
   const { key } = useParams();
@@ -25,11 +26,11 @@ export default function VibesFilterPage() {
 
   return (
     <div>
-      <Link to="/" className="text-sm text-accent hover:underline mb-4 inline-block">Back to Home</Link>
+      <Link to="/" className="text-sm text-accent hover:underline mb-4 inline-block">{t('vibes.backHome')}</Link>
       <h1 className="text-xl font-bold text-text mb-6">{key.replace(/-/g, ' ')}</h1>
       {loading ? <SkeletonGrid /> : error ? <ErrorState message={error} onRetry={load} /> : (
         series.length === 0 ? (
-          <EmptyState title="No results" message="No series match this mood right now." />
+          <EmptyState title={t('vibes.noResultsTitle')} message={t('vibes.noResultsMsg')} />
         ) : (
           <SeriesGrid series={series} />
         )

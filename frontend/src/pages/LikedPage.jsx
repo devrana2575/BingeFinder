@@ -6,6 +6,7 @@ import SeriesGrid from '../components/SeriesGrid';
 import EmptyState from '../components/EmptyState';
 import { SkeletonGrid } from '../components/Skeletons';
 import ErrorState from '../components/ErrorState';
+import { t } from '../i18n';
 
 export default function LikedPage() {
   const { isAuth } = useAuth();
@@ -28,14 +29,14 @@ export default function LikedPage() {
 
   return (
     <div>
-      <h1 className="text-xl font-bold text-text mb-6">Liked</h1>
+      <h1 className="text-xl font-bold text-text mb-6">{t('liked.title')}</h1>
       {loading ? <SkeletonGrid /> : error ? (
         <ErrorState message={error} onRetry={load} />
       ) : (!series || series.length === 0) ? (
         <EmptyState
-          title="No favorites yet"
-          message="Like series to keep track of what you enjoy."
-          action={<Link to="/discover" className="btn-primary">Discover Series</Link>}
+          title={t('liked.emptyTitle')}
+          message={t('liked.emptyMsg')}
+          action={<Link to="/discover" className="btn-primary">{t('cta.discoverSeries')}</Link>}
         />
       ) : (
         <SeriesGrid series={series} />

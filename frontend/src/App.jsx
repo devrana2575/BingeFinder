@@ -1,5 +1,6 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
+import { RegionProvider } from './context/RegionContext';
 import Layout from './components/Layout';
 import HomePage from './pages/HomePage';
 import DiscoverPage from './pages/DiscoverPage';
@@ -12,28 +13,32 @@ import LikedPage from './pages/LikedPage';
 import RecentlyViewedPage from './pages/RecentlyViewedPage';
 import ForYouPage from './pages/ForYouPage';
 import VibesFilterPage from './pages/VibesFilterPage';
+import SettingsPage from './pages/SettingsPage';
 import NotFoundPage from './pages/NotFoundPage';
 
 export default function App() {
   return (
     <BrowserRouter>
       <AuthProvider>
-        <Routes>
-          <Route element={<Layout />}>
-            <Route index element={<HomePage />} />
-            <Route path="discover" element={<DiscoverPage />} />
-            <Route path="discover/vibes/:key" element={<VibesFilterPage />} />
-            <Route path="surprise" element={<SurprisePage />} />
-            <Route path="series/:id" element={<SeriesDetailPage />} />
-            <Route path="watchlist" element={<WatchlistPage />} />
-            <Route path="liked" element={<LikedPage />} />
-            <Route path="recently-viewed" element={<RecentlyViewedPage />} />
-            <Route path="for-you" element={<ForYouPage />} />
-            <Route path="login" element={<LoginPage />} />
-            <Route path="signup" element={<SignupPage />} />
-            <Route path="*" element={<NotFoundPage />} />
-          </Route>
-        </Routes>
+        <RegionProvider>
+          <Routes>
+            <Route element={<Layout />}>
+              <Route index element={<HomePage />} />
+              <Route path="discover" element={<DiscoverPage />} />
+              <Route path="discover/vibes/:key" element={<VibesFilterPage />} />
+              <Route path="surprise" element={<SurprisePage />} />
+              <Route path="series/:id" element={<SeriesDetailPage />} />
+              <Route path="watchlist" element={<WatchlistPage />} />
+              <Route path="liked" element={<LikedPage />} />
+              <Route path="recently-viewed" element={<RecentlyViewedPage />} />
+              <Route path="for-you" element={<ForYouPage />} />
+              <Route path="settings" element={<SettingsPage />} />
+              <Route path="login" element={<LoginPage />} />
+              <Route path="signup" element={<SignupPage />} />
+              <Route path="*" element={<NotFoundPage />} />
+            </Route>
+          </Routes>
+        </RegionProvider>
       </AuthProvider>
     </BrowserRouter>
   );

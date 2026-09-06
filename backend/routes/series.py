@@ -10,6 +10,7 @@ from fastapi import APIRouter, Query
 
 from backend.schemas.series import SeriesSummary, SeriesDetail, SeriesSearchResult, CatalogCount
 from backend.services import series_service
+from api.tmdb import build_poster_url
 
 router = APIRouter()
 
@@ -20,7 +21,7 @@ def _doc_to_summary(doc: dict) -> SeriesSummary:
         name=doc.get("name") or "Untitled",
         rating=doc.get("rating"),
         genres=doc.get("genres") or [],
-        image=doc.get("image_medium") or doc.get("image_original"),
+        image=build_poster_url(doc.get("image_medium") or doc.get("image_original")),
         language=doc.get("language"),
         premiered=doc.get("premiered"),
         status=doc.get("status"),
@@ -51,7 +52,7 @@ def _doc_to_detail(doc: dict) -> SeriesDetail:
         status=doc.get("status"),
         runtime=doc.get("runtime"),
         average_runtime=doc.get("average_runtime"),
-        image=doc.get("image_original") or doc.get("image_medium"),
+        image=build_poster_url(doc.get("image_original") or doc.get("image_medium")),
         network=_channel_name(doc.get("network")) or _channel_name(doc.get("web_channel")),
         cast=cast_names[:10],
     )

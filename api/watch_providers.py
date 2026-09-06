@@ -22,13 +22,10 @@ from typing import Any, Dict, Optional
 
 from api.tmdb import TMDbAPIError, TMDbClient
 from config import ConfigError, get_tmdb_api_key
+from regions import DEFAULT_REGION, normalize_region
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
-
-# Default ISO 3166-1 region for availability lookups (free/ads are verified
-# against this region's provider set).
-DEFAULT_WATCH_REGION = "IN"
 
 # Maximum number of free/ad-supported providers surfaced to the user so the
 # free tier doesn't drown the UI (verified free/ads only).
@@ -301,7 +298,7 @@ def get_watch_providers_for_series(
         "buy": providers_raw.get("buy", []),
     }
 
-    effective_region = region or DEFAULT_WATCH_REGION
+    effective_region = normalize_region(region or DEFAULT_REGION)
 
     result: Dict[str, Any] = {
         "region": effective_region,
@@ -316,16 +313,56 @@ def get_watch_providers_for_series(
     return result
 
 
+def get_available_providers(region: Optional[str] = None) -> List[Dict[str, Any]]:
+    """
+    Fetch the watch providers available for TV in a region (raw TMDb list,
+    normalized into plain product-level items).
+
+    Used by the optional "My Services" picker so users can tell us which
+    services they already have — the provider list comes straight from the
+    availability data source, never hardcoded.
+
+    Returns:
+        A list of dicts: {"provider_id", "provider_name", "logo_url"}.
+        Returns [] if the availability service cannot be reached or has no
+        credentials (the caller reports the proper state in that case).
+    """
+    from config import ConfigError
+    try:
+        client = TMDbClient()
+    except (ConfigError, Exception) as exc:
+        logger.warning("Cannot initialise TMDb client for provider list: %s", exc)
+        return []
+
+    try:
+        providers = client.fetch_available_watch_providers(region=region)
+    except (TMDbAPIError, Exception) as exc:
+        logger.warning("Failed to fetch available watch providers: %s", exc)
+        return []
+
+    items: List[Dict[str, Any]] = []
+    for provider in providers:
+        provider_id = provider.get("provider_id")
+        if provider_id is None:
+            continue
+        items.append({
+            "provider_id": int(provider_id),
+            "provider_name": provider.get("provider_name") or "Unknown",
+            "logo_url": build_logo_url(provider.get("logo_path")),
+        })
+    return items
+
+
 def get_provider_page_url(series_name: str, region: Optional[str] = None) -> Optional[str]:
     """
     Build a JustWatch search URL as a fallback for manual browsing.
 
-    Uses the target region path (default India) so the availability page
-    reflects the region we resolve providers against.
+    Uses the target region path so the availability page reflects the
+    region we resolve providers against.
     """
     name = (series_name or "").strip()
     if not name:
         return None
     slug = _slugify(name)
-    region_code = (region or DEFAULT_WATCH_REGION).lower()
+    region_code = normalize_region(region or DEFAULT_REGION).lower()
     return f"https://www.justwatch.com/{region_code}/tv-show/{slug}"

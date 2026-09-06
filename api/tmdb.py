@@ -26,13 +26,10 @@ from config import (
     TMDB_BASE_URL,
     get_tmdb_api_key,
 )
+from regions import DEFAULT_REGION, normalize_region
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
-
-# BingeFinder's primary market: when a watch-provider lookup doesn't
-# specify a region, results are scoped to India.
-DEFAULT_WATCH_REGION = "IN"
 
 
 class TMDbAPIError(Exception):
@@ -256,6 +253,39 @@ class TMDbClient:
             return []
         return genres
 
+    def fetch_available_watch_providers(self, region: Optional[str] = None) -> List[Dict[str, Any]]:
+        """
+        Fetch the list of watch providers available for TV in a region.
+
+        This is the only legitimate source for populating the optional
+        "My Services" picker — the provider list must always come from the
+        availability data source, never hardcoded.
+
+        Args:
+            region: ISO 3166-1 country code. Defaults to DEFAULT_REGION
+                when omitted.
+
+        Returns:
+            List of raw TMDb provider dictionaries, each with provider_id,
+            provider_name, logo_path and display_priority.
+
+        Raises:
+            TMDbAPIError: If the request fails after retries, or TMDb
+                returns a non-2xx status code / malformed JSON.
+        """
+        effective_region = normalize_region(region or DEFAULT_REGION)
+        payload = self._get(
+            "/watch/providers/tv",
+            params={"language": "en-US", "watch_region": effective_region},
+        )
+        results = payload.get("results", [])
+        if not isinstance(results, list):
+            logger.warning(
+                "Unexpected 'results' shape from /watch/providers/tv; defaulting to empty list."
+            )
+            return []
+        return results
+
     def fetch_tv_credits(self, series_id: int, top_n: int = 10) -> List[Dict[str, Any]]:
         """
         Fetch the top-billed cast for a single TV/web series, sorted by
@@ -310,14 +340,13 @@ class TMDbClient:
     ) -> Dict[str, List[Dict[str, Any]]]:
         """
         Fetch watch-provider availability for a single TV/web series,
-        scoped to one region. Defaults to India ("IN"), BingeFinder's
-        primary market, since TMDb returns providers for every country at
-        once and most series only need to be checked against one.
+        scoped to one region. TMDb returns providers for every country at
+        once; we extract only the requested region's breakdown.
 
         Args:
             series_id: TMDb series ID.
             region: ISO 3166-1 country code to scope results to. Defaults
-                to `DEFAULT_WATCH_REGION` ("IN") if not provided.
+                to `settings.DEFAULT_REGION` if not provided.
 
         Returns:
             The offer-type breakdown for that region, e.g.
@@ -329,7 +358,7 @@ class TMDbClient:
             TMDbAPIError: If the request fails after retries, or TMDb
                 returns a non-2xx status code / malformed JSON.
         """
-        region = region or DEFAULT_WATCH_REGION
+        effective_region = normalize_region(region or DEFAULT_REGION)
         payload = self._get(f"/tv/{series_id}/watch/providers")
         results = payload.get("results", {})
         if not isinstance(results, dict):
@@ -338,7 +367,7 @@ class TMDbClient:
                 series_id,
             )
             return {}
-        return results.get(region, {})
+        return results.get(effective_region, {})
 
     def close(self) -> None:
         """Close the underlying HTTP session and release resources."""
@@ -375,14 +404,19 @@ def build_image_url(image_path: Optional[str], size: str) -> Optional[str]:
 
     Args:
         image_path: Relative image path as stored in the database (e.g.
-            "/abc123.jpg"), or None/empty if no image is available.
+            "/abc123.jpg"), or an already-absolute URL, or None/empty if
+            no image is available.
         size: TMDb image size segment, e.g. "w500", "original".
 
     Returns:
-        The full image URL, or None if `image_path` is falsy.
+        The full image URL, or None if `image_path` is falsy. Absolute
+        URLs (e.g. from a data source that stores full URLs) are returned
+        unchanged so they are never double-prefixed.
     """
     if not image_path:
         return None
+    if isinstance(image_path, str) and image_path.startswith(("http://", "https://")):
+        return image_path
     return f"{TMDB_IMAGE_CDN_BASE_URL}/{size}{image_path}"
 
 

@@ -38,7 +38,7 @@ export default function RegionSelector() {
         value={region || ''}
         onChange={(e) => setRegion(e.target.value)}
         aria-label={t('region.selectorAria')}
-        className="flex-1 min-w-0 bg-transparent text-sm text-text-secondary focus:text-text focus:outline-none cursor-pointer"
+        className="flex-1 min-w-0 bg-surface text-text text-sm focus:text-text focus:outline-none cursor-pointer"
       >
         {regions.map(r => (
           <option key={r.code} value={r.code}>{r.name}</option>

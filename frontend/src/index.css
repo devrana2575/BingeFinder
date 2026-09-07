@@ -28,6 +28,21 @@ body {
   -moz-osx-font-smoothing: grayscale;
 }
 
+/* Native form controls: force the dark theme everywhere. The browser/OS
+   dropdown popup for <select> defaults to a white background with black text,
+   which clashes with the dark UI. Styling the element AND its options keeps
+   the control and its popup on-theme (color-scheme: dark also darkens the
+   popup on supporting browsers). */
+select {
+  color: var(--color-text);
+  background-color: var(--color-surface);
+  color-scheme: dark;
+}
+select option {
+  color: var(--color-text);
+  background-color: var(--color-surface);
+}
+
 h1, h2, h3, h4, h5, h6 {
   font-family: var(--font-heading);
 }

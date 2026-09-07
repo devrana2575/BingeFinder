@@ -71,6 +71,48 @@ class FakeTMDbClient:
     def fetch_tv_credits(self, tmdb_id, top_n=8):
         return [{"id": 1, "name": "Actress A", "character": "Lead", "profile_path": "/a.jpg"}]
 
+    def fetch_movie_genres(self):
+        return [{"id": k, "name": v} for k, v in (self.genre_map or {}).items()] + \
+            [{"id": 16, "name": "Animation"}]
+
+    def fetch_popular_movie(self, page=1):
+        rows = self._paginate([self._movie_row(n) for n in range(1, 7)])
+        return rows[page - 1]
+
+    def fetch_top_rated_movie(self, page=1):
+        return []
+
+    def fetch_now_playing_movie(self, page=1):
+        return []
+
+    def _movie_row(self, n):
+        return {
+            "id": n + 100,
+            "title": f"Fake Movie {n}",
+            "original_title": f"Fake Movie {n}",
+            "original_language": "en",
+            "genre_ids": [10759],
+            "release_date": "2022-02-02",
+            "vote_average": 7.8,
+            "popularity": 90.0,
+            "overview": "A fake movie description.",
+            "poster_path": f"/mposter{n}.jpg",
+            "backdrop_path": f"/mbackdrop{n}.jpg",
+            "adult": False,
+        }
+
+    def fetch_movie_details(self, tmdb_id):
+        self.enriched.append(tmdb_id)
+        return {
+            "runtime": 128,
+            "status": "Released",
+            "homepage": "https://example.com",
+            "release_date": "2022-02-02",
+        }
+
+    def fetch_movie_credits(self, tmdb_id, top_n=8):
+        return [{"id": 2, "name": "Actor B", "character": "Star", "profile_path": "/b.jpg"}]
+
     def close(self):
         pass
 
@@ -144,3 +186,74 @@ def test_run_catalog_update_respects_pages(seeded_mongo_manager):
     assert summary["total_inserted"] == 4
     assert "popular" in summary["lists"]
     assert summary["lists"]["popular"]["inserted"] == 4
+
+
+def test_movie_rows_ingest_with_content_type(seeded_mongo_manager):
+    from backend.services.catalog_ingest import ingest_rows
+
+    client = FakeTMDbClient()
+    counts = ingest_rows(seeded_mongo_manager, [client._movie_row(1)],
+                         genre_map=client.genre_map, enrich=False, content_type="movie")
+    assert counts["inserted"] == 1
+    doc = seeded_mongo_manager.series.find_one({"series_id": 101})
+    assert doc["content_type"] == "movie"
+    assert doc["name"] == "Fake Movie 1"
+    assert doc["premiered"] == "2022-02-02"
+    assert doc["genres"] == ["Action & Adventure"]
+    assert doc["external_ids"]["tmdb"] == 101
+
+
+def test_anime_content_type_derived_from_language_and_animation(seeded_mongo_manager):
+    from backend.services.catalog_ingest import ingest_rows, normalize_tmdb_row
+
+    client = FakeTMDbClient()
+    # Japanese + Animation genre -> anime, for both series and movies.
+    row = client._row(50)
+    row["original_language"] = "ja"
+    row["genre_ids"] = [16, 10759]
+    doc = normalize_tmdb_row(row, genre_map=client.genre_map)
+    assert doc["content_type"] == "anime"
+
+    mrow = client._movie_row(60)
+    mrow["original_language"] = "ja"
+    mrow["genre_ids"] = [16]
+    from backend.services.catalog_ingest import normalize_tmdb_movie_row
+    mdoc = normalize_tmdb_movie_row(mrow, genre_map=client.genre_map)
+    assert mdoc["content_type"] == "anime"
+
+    # Japanese alone is NOT anime — both signals are required.
+    row2 = client._row(51)
+    row2["original_language"] = "ja"
+    row2["genre_ids"] = [10759]
+    assert normalize_tmdb_row(row2, genre_map=client.genre_map)["content_type"] == "tv_series"
+
+
+def test_movie_enrichment_adds_runtime_and_cast(seeded_mongo_manager):
+    from backend.services.catalog_ingest import ingest_rows
+
+    client = FakeTMDbClient()
+    ingest_rows(seeded_mongo_manager, [client._movie_row(2)], genre_map=client.genre_map,
+                enrich=True, client=client, enrich_limit=5, content_type="movie")
+    doc = seeded_mongo_manager.series.find_one({"series_id": 102})
+    assert doc["runtime"] == 128
+    assert doc["status"] == "Released"
+    assert doc["official_site"] == "https://example.com"
+    assert doc["cast"][0]["person_name"] == "Actor B"
+
+
+def test_run_catalog_update_movie_type_uses_movie_endpoints(seeded_mongo_manager):
+    from backend.services.catalog_ingest import run_catalog_update
+
+    client = FakeTMDbClient(pages=2, rows_per_page=2)
+    summary = run_catalog_update(
+        pages_per_list=2,
+        lists=["popular"],
+        sleep_seconds=0,
+        enrich=False,
+        manager=seeded_mongo_manager,
+        client_factory=lambda: client,
+        content_type="movie",
+    )
+    assert summary["total_inserted"] == 4
+    for doc in seeded_mongo_manager.series.find({"series_id": {"$in": [101, 102, 103, 104]}}):
+        assert doc["content_type"] == "movie"

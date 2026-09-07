@@ -19,6 +19,7 @@ def _doc_to_summary(doc: dict) -> SeriesSummary:
     return SeriesSummary(
         series_id=doc["series_id"],
         name=doc.get("name") or "Untitled",
+        content_type=doc.get("content_type") or "tv_series",
         rating=doc.get("rating"),
         genres=doc.get("genres") or [],
         image=build_poster_url(doc.get("image_medium") or doc.get("image_original")),
@@ -43,6 +44,7 @@ def _doc_to_detail(doc: dict) -> SeriesDetail:
     return SeriesDetail(
         series_id=doc["series_id"],
         name=doc.get("name") or "Untitled",
+        content_type=doc.get("content_type") or "tv_series",
         summary=doc.get("summary"),
         genres=doc.get("genres") or [],
         rating=doc.get("rating"),
@@ -79,6 +81,7 @@ def search(
     year: Optional[int] = Query(None, description="Filter by premiere year"),
     status: Optional[str] = Query(None, description="Filter by status"),
     min_rating: float = Query(0.0, description="Minimum rating"),
+    content_type: Optional[str] = Query(None, description="Filter by content type (tv_series|movie|anime)"),
 ):
     docs, err = series_service.get_all_series()
     if err:
@@ -87,7 +90,7 @@ def search(
     genres = [genre] if genre else None
     filtered = series_service.search_series(
         docs, query=q, genres=genres, min_rating=min_rating,
-        language=language, year=year, status=status,
+        language=language, year=year, status=status, content_type=content_type,
     )
     results = [_doc_to_summary(d) for d in filtered[:50]]
     return SeriesSearchResult(query=q, total_results=len(filtered), results=results)

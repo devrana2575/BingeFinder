@@ -80,11 +80,12 @@ def search_series(
     language: Optional[str] = None,
     year: Optional[int] = None,
     status: Optional[str] = None,
+    content_type: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """Filter in-memory catalog.
 
-    Supports filters (query, genres, min_rating, language, year, status) and,
-    when a query is present, ranks by title-match tier:
+    Supports filters (query, genres, min_rating, language, year, status,
+    content_type) and, when a query is present, ranks by title-match tier:
 
         0. Normalized exact name/original-title match
         1. Prefix match (title starts with the query)
@@ -141,6 +142,8 @@ def search_series(
                 continue
         if status and doc.get("status") != status:
             continue
+        if content_type and doc.get("content_type", "tv_series") != content_type:
+            continue
         results.append(doc)
 
     if query:
@@ -180,7 +183,7 @@ def search_series(
 
 
 def get_filter_options(docs: List[Dict[str, Any]]) -> Dict[str, List]:
-    genres, languages, statuses, years = set(), set(), set(), set()
+    genres, languages, statuses, years, content_types = set(), set(), set(), set(), set()
     for doc in docs:
         for g in doc.get("genres") or []:
             if isinstance(g, str) and g.strip():
@@ -189,6 +192,7 @@ def get_filter_options(docs: List[Dict[str, Any]]) -> Dict[str, List]:
             languages.add(doc["language"].strip())
         if isinstance(doc.get("status"), str) and doc["status"].strip():
             statuses.add(doc["status"].strip())
+        content_types.add(doc.get("content_type") or "tv_series")
         premiered = doc.get("premiered") or ""
         if len(premiered) >= 4 and premiered[:4].isdigit():
             yr = int(premiered[:4])
@@ -199,4 +203,5 @@ def get_filter_options(docs: List[Dict[str, Any]]) -> Dict[str, List]:
         "languages": sorted(languages),
         "statuses": sorted(statuses),
         "years": sorted(years, reverse=True),
+        "content_types": sorted(ct for ct in content_types if ct in ("movie", "tv_series", "anime")),
     }

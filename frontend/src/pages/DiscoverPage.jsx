@@ -29,6 +29,7 @@ export default function DiscoverPage() {
   const year = searchParams.get('year') || '';
   const min_rating = searchParams.get('min_rating') || '';
   const status = searchParams.get('status') || '';
+  const type = searchParams.get('type') || '';
 
   const [localQuery, setLocalQuery] = useState(q);
   const debouncedQuery = useDebounce(localQuery, 300);
@@ -57,6 +58,7 @@ export default function DiscoverPage() {
     if (year) params.year = year;
     if (min_rating) params.min_rating = min_rating;
     if (status) params.status = status;
+    if (type) params.content_type = type;
     api.search(params)
       .then(d => {
         setSeries(d.results || []);
@@ -64,7 +66,7 @@ export default function DiscoverPage() {
       })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
-  }, [q, genre, year, min_rating, status]);
+  }, [q, genre, year, min_rating, status, type]);
 
   useEffect(load, [load]);
 
@@ -81,7 +83,7 @@ export default function DiscoverPage() {
     });
   };
 
-  const activeFilters = [genre, year, min_rating, status].filter(Boolean).length;
+  const activeFilters = [genre, year, min_rating, status, type].filter(Boolean).length;
 
   return (
     <div>
@@ -106,6 +108,15 @@ export default function DiscoverPage() {
 
       {filterOptions && (
         <div className="flex flex-wrap gap-2 mb-6">
+          <label htmlFor="filter-type" className="sr-only">{t('discover.filterTypeLabel')}</label>
+          <select id="filter-type" value={type} onChange={e => setFilter('type', e.target.value)}
+            className="px-3 py-1.5 rounded-lg bg-surface border border-border text-sm text-text-secondary focus:border-accent">
+            <option value="">{t('discover.allTypes')}</option>
+            <option value="tv_series">{t('discover.typeSeries')}</option>
+            <option value="movie">{t('discover.typeMovies')}</option>
+            <option value="anime">{t('discover.typeAnime')}</option>
+          </select>
+
           <label htmlFor="filter-genre" className="sr-only">{t('discover.filterGenreLabel')}</label>
           <select id="filter-genre" value={genre} onChange={e => setFilter('genre', e.target.value)}
             className="px-3 py-1.5 rounded-lg bg-surface border border-border text-sm text-text-secondary focus:border-accent">

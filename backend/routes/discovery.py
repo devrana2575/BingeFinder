@@ -25,6 +25,7 @@ def _doc_to_summary(doc: dict) -> SeriesSummary:
     return SeriesSummary(
         series_id=doc["series_id"],
         name=doc.get("name") or "Untitled",
+        content_type=doc.get("content_type") or "tv_series",
         rating=doc.get("rating"),
         genres=doc.get("genres") or [],
         image=build_poster_url(doc.get("image_medium") or doc.get("image_original")),
@@ -46,6 +47,7 @@ def _doc_to_pick(doc: dict) -> SurprisePick:
     return SurprisePick(
         series_id=doc["series_id"],
         name=doc.get("name") or "Untitled",
+        content_type=doc.get("content_type") or "tv_series",
         rating=doc.get("rating"),
         genres=doc.get("genres") or [],
         image=build_poster_url(doc.get("image_medium") or doc.get("image_original")),

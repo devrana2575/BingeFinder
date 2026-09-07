@@ -485,6 +485,7 @@ def get_recommendations(
         recommendations.append({
             "series_id": candidate_id,
             "title": candidate_meta.get("title"),
+            "content_type": candidate_meta.get("content_type") or "tv_series",
             "rating": candidate_meta.get("rating"),
             "genres": candidate_meta.get("genres", []),
             "image": candidate_meta.get("image"),

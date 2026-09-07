@@ -14,6 +14,7 @@ class SurprisePick(BaseModel):
 
     series_id: int
     name: str
+    content_type: str = "tv_series"
     rating: Optional[float] = None
     genres: List[str] = []
     image: Optional[str] = None

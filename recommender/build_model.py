@@ -66,6 +66,7 @@ def _extract_metadata(doc: Dict[str, Any]) -> Dict[str, Any]:
     genres_list = genres if isinstance(genres, list) else []
     return {
         "title": doc.get("name"),
+        "content_type": doc.get("content_type") or "tv_series",
         "rating": doc.get("rating"),
         "genres": genres_list,
         "image": doc.get("image_medium") or doc.get("image_original"),

@@ -2,7 +2,9 @@
 api/tmdb.py
 ===========
 Thin, well-tested client around the TMDb (The Movie Database) REST API,
-scoped to TV/web-series endpoints.
+covering both TV/web-series and movie endpoints. Catalog ingestion maps
+either type onto the generic `series` document schema (each document
+carries a `content_type`).
 
 Design notes:
     - A single `requests.Session` is reused (with a mounted retry adapter)
@@ -368,6 +370,151 @@ class TMDbClient:
             )
             return {}
         return results.get(effective_region, {})
+
+    def fetch_movie_watch_providers(
+        self, movie_id: int, region: Optional[str] = None
+    ) -> Dict[str, List[Dict[str, Any]]]:
+        """
+        Fetch watch-provider availability for a single movie, scoped to
+        one region. TMDb returns providers for every country at once; we
+        extract only the requested region's breakdown.
+
+        Args:
+            movie_id: TMDb movie ID.
+            region: ISO 3166-1 country code to scope results to. Defaults
+                to `settings.DEFAULT_REGION` if not provided.
+
+        Returns:
+            The offer-type breakdown for that region, e.g.
+            {"flatrate": [...], "rent": [...], "buy": [...]}. Returns an
+            empty dict if the movie has no listed providers in that region.
+
+        Raises:
+            TMDbAPIError: If the request fails after retries, or TMDb
+                returns a non-2xx status code / malformed JSON.
+        """
+        effective_region = normalize_region(region or DEFAULT_REGION)
+        payload = self._get(f"/movie/{movie_id}/watch/providers")
+        results = payload.get("results", {})
+        if not isinstance(results, dict):
+            logger.warning(
+                "Unexpected 'results' shape from /movie/%s/watch/providers; defaulting to empty dict.",
+                movie_id,
+            )
+            return {}
+        return results.get(effective_region, {})
+
+    # ------------------------------------------------------------------
+    # Movie list endpoints — /movie/{list} (one fetch_* per list).
+    # ------------------------------------------------------------------
+    def fetch_popular_movie(self, page: int = 1) -> List[Dict[str, Any]]:
+        """
+        Fetch currently popular movies.
+
+        Args:
+            page: Page number to fetch.
+
+        Returns:
+            List of raw TMDb movie dictionaries.
+        """
+        return self._fetch_results("/movie/popular", page=page)
+
+    def fetch_top_rated_movie(self, page: int = 1) -> List[Dict[str, Any]]:
+        """
+        Fetch top-rated movies of all time (per TMDb ranking).
+
+        Args:
+            page: Page number to fetch.
+
+        Returns:
+            List of raw TMDb movie dictionaries.
+        """
+        return self._fetch_results("/movie/top_rated", page=page)
+
+    def fetch_now_playing_movie(self, page: int = 1) -> List[Dict[str, Any]]:
+        """
+        Fetch movies now playing in theatres.
+
+        Args:
+            page: Page number to fetch.
+
+        Returns:
+            List of raw TMDb movie dictionaries.
+        """
+        return self._fetch_results("/movie/now_playing", page=page)
+
+    def fetch_upcoming_movie(self, page: int = 1) -> List[Dict[str, Any]]:
+        """
+        Fetch upcoming movies.
+
+        Args:
+            page: Page number to fetch.
+
+        Returns:
+            List of raw TMDb movie dictionaries.
+        """
+        return self._fetch_results("/movie/upcoming", page=page)
+
+    def fetch_movie_details(self, movie_id: int) -> Dict[str, Any]:
+        """
+        Fetch full details for a single movie (runtime, status, homepage,
+        release dates).
+
+        Args:
+            movie_id: TMDb movie ID.
+
+        Returns:
+            The raw TMDb movie details dictionary.
+
+        Raises:
+            TMDbAPIError: If the request fails after retries, or TMDb
+                returns a non-2xx status code / malformed JSON.
+        """
+        return self._get(f"/movie/{movie_id}")
+
+    def fetch_movie_genres(self) -> List[Dict[str, Any]]:
+        """
+        Fetch TMDb's official list of movie genres (id + name pairs).
+
+        Returns:
+            List of raw TMDb genre dictionaries, each with "id" and "name".
+
+        Raises:
+            TMDbAPIError: If the request fails after retries, or TMDb
+                returns a non-2xx status code / malformed JSON.
+        """
+        payload = self._get("/genre/movie/list")
+        genres = payload.get("genres", [])
+        if not isinstance(genres, list):
+            logger.warning("Unexpected 'genres' shape from /genre/movie/list; defaulting to empty list.")
+            return []
+        return genres
+
+    def fetch_movie_credits(self, movie_id: int, top_n: int = 10) -> List[Dict[str, Any]]:
+        """
+        Fetch the top-billed cast for a single movie, sorted by TMDb's
+        billing order (lower "order" = more prominent).
+
+        Args:
+            movie_id: TMDb movie ID.
+            top_n: Maximum number of cast members to return.
+
+        Returns:
+            List of up to `top_n` raw TMDb cast-credit dictionaries.
+
+        Raises:
+            TMDbAPIError: If the request fails after retries, or TMDb
+                returns a non-2xx status code / malformed JSON.
+        """
+        payload = self._get(f"/movie/{movie_id}/credits")
+        cast = payload.get("cast", [])
+        if not isinstance(cast, list):
+            logger.warning(
+                "Unexpected 'cast' shape from /movie/%s/credits; defaulting to empty list.", movie_id
+            )
+            return []
+        sorted_cast = sorted(cast, key=lambda member: member.get("order", float("inf")))
+        return sorted_cast[:top_n]
 
     def close(self) -> None:
         """Close the underlying HTTP session and release resources."""

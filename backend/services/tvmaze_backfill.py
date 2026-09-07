@@ -123,6 +123,7 @@ def normalize_tvmaze_row(row: Dict[str, Any]) -> Dict[str, Any]:
 
     doc: Dict[str, Any] = {
         "series_id": series_id,
+        "content_type": "tv_series",
         "name": _ext("name"),
         "summary": strip_html(row.get("summary")),
         "genres": [g for g in row.get("genres") or [] if isinstance(g, str)] or [],
@@ -142,6 +143,11 @@ def normalize_tvmaze_row(row: Dict[str, Any]) -> Dict[str, Any]:
         "web_channel": web_channel,
         "imdb_id": externals.get("imdb") or None,
         "thetvdb_id": externals.get("thetvdb") or None,
+        "external_ids": {
+            "tvmaze": series_id,
+            "imdb": externals.get("imdb") or None,
+            "tvdb": externals.get("thetvdb") or None,
+        },
         "cast": [],
         "catalog_source": "tvmaze",
     }

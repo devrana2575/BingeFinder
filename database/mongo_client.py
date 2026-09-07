@@ -213,6 +213,10 @@ class MongoDBManager:
             raise ValueError("series_document must include a 'series_id' to upsert.")
 
         document_to_set = dict(series_document)
+        # The catalog is content-type generic: legacy docs that predate
+        # the field (or rows whose normalizer omitted it) default to the
+        # historical "tv_series" bucket rather than being left untyped.
+        document_to_set.setdefault("content_type", "tv_series")
         document_to_set["last_synced_at"] = datetime.now(timezone.utc).isoformat(timespec="seconds")
 
         try:

@@ -12,6 +12,7 @@ from pydantic import BaseModel
 class SeriesSummary(BaseModel):
     series_id: int
     name: str
+    content_type: str = "tv_series"
     rating: Optional[float] = None
     genres: List[str] = []
     image: Optional[str] = None
@@ -28,6 +29,7 @@ class SeriesSummary(BaseModel):
 class SeriesDetail(BaseModel):
     series_id: int
     name: str
+    content_type: str = "tv_series"
     summary: Optional[str] = None
     genres: List[str] = []
     rating: Optional[float] = None

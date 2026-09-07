@@ -74,3 +74,38 @@ def test_year_filter_applies_together_with_query():
     docs[4]["premiered"] = "2016-07-15"
     result = search_series(docs, query="the", year=2005)
     assert [d["series_id"] for d in result] == [4]
+
+
+def test_content_type_filter_isolates_movies_and_mixed_types():
+    docs = _docs() + [
+        {"series_id": 6, "name": "Parasite", "original_name": "Gisaengchung",
+         "genres": ["Thriller"], "rating": 8.5, "language": "Korean",
+         "content_type": "movie"},
+        {"series_id": 7, "name": "Your Name", "original_name": "Kimi no Na wa.",
+         "genres": ["Animation"], "rating": 8.4, "language": "Japanese",
+         "content_type": "anime"},
+    ]
+    movies = search_series(docs, content_type="movie")
+    assert [d["series_id"] for d in movies] == [6]
+    anime = search_series(docs, content_type="anime")
+    assert [d["series_id"] for d in anime] == [7]
+    series = search_series(docs, content_type="tv_series")
+    assert 1 in [d["series_id"] for d in series]
+    assert 6 not in [d["series_id"] for d in series]
+
+
+def test_content_type_filter_coexists_with_query_ranking():
+    docs = _docs() + [
+        {"series_id": 6, "name": "Parasite", "original_name": "Gisaengchung",
+         "genres": ["Thriller"], "rating": 8.5, "language": "Korean",
+         "content_type": "movie"},
+    ]
+    result = search_series(docs, query="coming", content_type="tv_series")
+    assert all(d.get("content_type", "tv_series") == "tv_series" for d in result)
+
+
+def test_legacy_docs_default_to_tv_series_for_type_filter():
+    # Documents that predate the content_type field must still match a
+    # "tv_series" filter (the historical bucket) rather than being hidden.
+    result = search_series(_docs(), content_type="tv_series")
+    assert len(result) == len(_docs())

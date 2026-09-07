@@ -213,6 +213,27 @@ The model artifact is saved to `recommender/artifacts/` and auto-loads at API st
 
 ---
 
+## Catalog Maintenance
+
+The catalog grows via two idempotent, upsert-only ingesters (data is never wiped):
+
+- **TMDb ingest** (needs `TMDB_API_KEY`): incremental pull of TMDb TV list endpoints.
+
+  ```bash
+  python -m backend.services.catalog_ingest --pages 3 --enrich
+  ```
+
+- **TVMaze backfill** (keyless — no API key required): scans the public TVMaze index and adds quality shows.
+  Shows need a name and an image to be included; the `--max-new` cap bounds each run.
+
+  ```bash
+  python -m backend.services.tvmaze_backfill --min-weight 25 --max-new 3000
+  ```
+
+After growing the catalog, rebuild the recommendation model (above) so newly added titles are recommendable. The live count endpoint (`/api/series/count`) reflects the catalog as-is.
+
+---
+
 ## Future Improvements
 
 - Collaborative filtering alongside content-based recommendations

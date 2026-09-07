@@ -24,7 +24,8 @@ export default function SeriesDetailPage() {
   const [recs, setRecs] = useState(null);
   const [providers, setProviders] = useState(null);
   const [inWatchlist, setInWatchlist] = useState(false);
-  const [isLiked, setIsLiked] = useState(false);
+  const [reaction, setReaction] = useState(null);
+  const [reactionError, setReactionError] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -62,9 +63,10 @@ export default function SeriesDetailPage() {
     api.watchlist().then(items => {
       setInWatchlist(items.some(i => i.series_id === series.series_id));
     }).catch(() => {});
-    api.likes().then(items => {
-      setIsLiked(items.some(i => i.series_id === series.series_id));
-    }).catch(() => {});
+    api.reactions().then(items => {
+      const found = items.find(i => i.series_id === series.series_id);
+      setReaction(found ? found.reaction : null);
+    }).catch(() => { setReaction(null); });
   }, [isAuth, series?.series_id]);
 
   const toggleWatchlist = async () => {
@@ -90,25 +92,28 @@ export default function SeriesDetailPage() {
     }
   };
 
-  const toggleLike = async () => {
+  const updateReaction = async (value) => {
     if (!isAuth) {
       toast.info(t('action.loginRequired'));
       return navigate('/login');
     }
-    const prev = isLiked;
-    setIsLiked(!prev);
+    const prev = reaction;
+    const next = prev === value ? null : value;
+    setReaction(next);
+    setReactionError(null);
     try {
-      if (prev) {
-        await api.unlike(series.series_id);
-        api.recordEvent({ series_id: series.series_id, event_type: 'unlike' }).catch(() => {});
-        toast.info(t('action.unliked'));
+      if (next) {
+        await api.setReaction(series.series_id, next);
+        if (next === 'love') toast.success(t('detail.loveSaved'));
+        else if (next === 'like') toast.success(t('detail.likeSaved'));
+        else toast.success(t('detail.notForMeSaved'));
       } else {
-        await api.like(series.series_id);
-        api.recordEvent({ series_id: series.series_id, event_type: 'like' }).catch(() => {});
-        toast.success(t('action.liked'));
+        await api.clearReaction(series.series_id);
+        toast.info(t('detail.reactionCleared'));
       }
     } catch {
-      setIsLiked(prev);
+      setReaction(prev);
+      setReactionError(t('action.genericError'));
       toast.error(t('action.genericError'));
     }
   };
@@ -166,7 +171,7 @@ export default function SeriesDetailPage() {
             />
           )}
 
-          <div className="flex gap-2">
+          <div className="flex gap-2 flex-wrap">
             <button
               onClick={toggleWatchlist}
               className={`btn-ghost ${inWatchlist ? '!border-accent !text-accent !bg-accent/10' : ''}`}
@@ -175,13 +180,36 @@ export default function SeriesDetailPage() {
               {inWatchlist ? t('detail.inWatchlist') : t('detail.addWatchlist')}
             </button>
             <button
-              onClick={toggleLike}
-              className={`btn-ghost ${isLiked ? '!border-success !text-success !bg-success/10' : ''}`}
-              aria-pressed={isLiked}
+              onClick={() => updateReaction('love')}
+              className={`btn-ghost ${reaction === 'love' ? '!border-success !text-success !bg-success/10' : ''}`}
+              aria-pressed={reaction === 'love'}
             >
-              {isLiked ? t('detail.liked') : t('detail.like')}
+              &hearts; {reaction === 'love' ? t('detail.loved') : t('detail.love')}
+            </button>
+            <button
+              onClick={() => updateReaction('like')}
+              className={`btn-ghost ${reaction === 'like' ? '!border-accent !text-accent !bg-accent/10' : ''}`}
+              aria-pressed={reaction === 'like'}
+            >
+              &#10003; {reaction === 'like' ? t('detail.liked') : t('detail.like')}
+            </button>
+            <button
+              onClick={() => updateReaction('dislike')}
+              className={`btn-ghost ${reaction === 'dislike' ? '!border-danger !text-danger !bg-danger/10' : ''}`}
+              aria-pressed={reaction === 'dislike'}
+            >
+              &#215; {reaction === 'dislike' ? t('detail.notForMeActive') : t('detail.notForMe')}
             </button>
           </div>
+
+          {reaction === 'dislike' && (
+            <p className="text-sm text-text-muted mt-2" role="status">
+              {t('detail.notForMeHintTitle')} — {t('detail.notForMeHint')}
+            </p>
+          )}
+          {reactionError && (
+            <p className="text-sm text-danger mt-2" role="alert">{reactionError}</p>
+          )}
         </div>
       </div>
 

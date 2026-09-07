@@ -82,6 +82,10 @@ export const api = {
   likes: () => request('/user/likes'),
   like: (id) => request(`/user/likes/${id}`, { method: 'POST' }),
   unlike: (id) => request(`/user/likes/${id}`, { method: 'DELETE' }),
+  reactions: () => request('/user/reactions'),
+  setReaction: (id, reaction) =>
+    request(`/user/reactions/${id}?reaction=${encodeURIComponent(reaction)}`, { method: 'POST' }),
+  clearReaction: (id) => request(`/user/reactions/${id}`, { method: 'DELETE' }),
   recentlyViewed: () => request('/user/recently-viewed'),
   recordView: (id) => request(`/user/recently-viewed/${id}`, { method: 'POST' }),
 

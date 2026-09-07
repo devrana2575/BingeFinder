@@ -92,17 +92,30 @@ def get_personalized_recommendations(
 
     weighted_ids: Dict[int, float] = {}
     service_ids: List[int] = []
+    # Titles the user has explicitly rejected (NOT FOR ME). Actively
+    # suppressed — never recommended and used to downweight similar content.
+    disliked_set: set = set()
     try:
         from database.watchlist import WatchlistManager
         from database.likes import LikesManager
         from database.recently_viewed import RecentlyViewedManager
         from database.users import UserManager
+        from database.interactions import InteractionManager, REACTION_WEIGHTS
 
         preferences = UserManager(manager).get_preferences(user_id) or {}
         service_ids = [
             int(s) for s in (preferences.get("services") or [])
             if isinstance(s, int) or str(s).isdigit()
         ]
+
+        im = InteractionManager(manager)
+        for sid, reaction in im.get_reaction_map(user_id).items():
+            if reaction == "dislike":
+                disliked_set.add(sid)
+            else:
+                weighted_ids[sid] = max(
+                    weighted_ids.get(sid, 0), REACTION_WEIGHTS.get(reaction, _WEIGHT_LIKED)
+                )
 
         wl = WatchlistManager(manager)
         for doc in wl.get_watchlist(user_id):
@@ -160,8 +173,10 @@ def get_personalized_recommendations(
         user_semantic = np.average(semantic_embeddings[user_rows], axis=0, weights=weights)
 
     interacted_set = set(weighted_ids.keys())
+    # Disliked titles are never recommended, and do not seed the user vector.
+    excluded_set = interacted_set | disliked_set
     all_rows = np.arange(len(series_ids))
-    mask = np.array([sid not in interacted_set for sid in series_ids])
+    mask = np.array([sid not in excluded_set for sid in series_ids])
     candidate_rows = all_rows[mask]
 
     if len(candidate_rows) == 0:
@@ -175,11 +190,23 @@ def get_personalized_recommendations(
 
     genre_scores = np.zeros(len(candidate_rows), dtype=np.float32)
     quality_scores = np.zeros(len(candidate_rows), dtype=np.float32)
+    # Build the genre profile of disliked titles so similar content can be
+    # actively down-weighted (NOT FOR ME signal reaches beyond the title itself).
+    disliked_genres = set()
+    if disliked_set:
+        for did in disliked_set:
+            dmeta = metadata.get(did, {})
+            disliked_genres |= set(dmeta.get("genres_set", set()))
     for i, row in enumerate(candidate_rows):
         cand_id = series_ids[row]
         cand_meta = metadata.get(cand_id, {})
         cand_genres = cand_meta.get("genres_set", set())
         genre_scores[i] = _genre_jaccard(set(), cand_genres)
+        if disliked_genres and cand_genres:
+            overlap = len(cand_genres & disliked_genres)
+            if overlap > 0:
+                # Penalize candidates that share genres with rejected titles.
+                genre_scores[i] -= 0.05 * min(overlap, 3)
         rating = cand_meta.get("rating")
         quality_scores[i] = (rating / 10.0) if isinstance(rating, (int, float)) else 0.5
 

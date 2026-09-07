@@ -30,6 +30,7 @@ def _doc_to_summary(doc: dict) -> SeriesSummary:
         language=doc.get("language"),
         premiered=doc.get("premiered"),
         status=doc.get("status"),
+        reaction=doc.get("reaction"),
     )
 
 
@@ -87,6 +88,39 @@ def unlike_series(series_id: int, user_id: str = Depends(require_auth)):
     if err:
         raise HTTPException(status_code=503, detail=err)
     return {"status": "unliked"}
+
+
+# ---------------------------------------------------------------------------
+# Reactions (LIKE / LOVE / NOT FOR ME)
+# ---------------------------------------------------------------------------
+
+VALID_REACTIONS = {"love", "like", "dislike"}
+
+
+@router.get("/reactions", response_model=List[SeriesSummary])
+def get_reactions(user_id: str = Depends(require_auth)):
+    docs, err = user_service.get_reactions(user_id)
+    if err:
+        raise HTTPException(status_code=503, detail=err)
+    return [_doc_to_summary(d) for d in docs]
+
+
+@router.post("/reactions/{series_id}")
+def set_reaction(series_id: int, reaction: str, user_id: str = Depends(require_auth)):
+    if reaction not in VALID_REACTIONS:
+        raise HTTPException(status_code=422, detail="Reaction must be love, like, or dislike")
+    ok, err = user_service.set_reaction(user_id, series_id, reaction)
+    if err:
+        raise HTTPException(status_code=503, detail=err)
+    return {"status": reaction}
+
+
+@router.delete("/reactions/{series_id}")
+def clear_reaction(series_id: int, user_id: str = Depends(require_auth)):
+    ok, err = user_service.clear_reaction(user_id, series_id)
+    if err:
+        raise HTTPException(status_code=503, detail=err)
+    return {"status": "cleared"}
 
 
 # ---------------------------------------------------------------------------

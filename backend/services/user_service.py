@@ -7,6 +7,9 @@ Wraps watchlist/likes/recently_viewed managers.
 from typing import Any, Dict, List, Optional, Tuple
 
 from database.mongo_client import MongoDBManager
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 
 def _connect() -> Tuple[MongoDBManager, None] | Tuple[None, str]:
@@ -134,6 +137,77 @@ def unlike_series(user_id: str, series_id: int) -> Tuple[bool, Optional[str]]:
         return True, None
     except Exception as exc:
         return False, f"Could not unlike series: {exc}"
+    finally:
+        manager.close()
+
+
+# ---------------------------------------------------------------------------
+# Reactions (LIKE / LOVE / NOT FOR ME)
+# ---------------------------------------------------------------------------
+
+def get_reactions(user_id: str) -> Tuple[List[Dict], Optional[str]]:
+    """Return all reacted series for a user, each tagged with its reaction."""
+    manager, err = _connect()
+    if err:
+        return [], err
+    try:
+        from database.interactions import InteractionManager
+        im = InteractionManager(manager)
+        reactions = im.get_reactions(user_id)
+
+        from backend.services.series_service import get_all_series
+        docs, _ = get_all_series()
+        series_map = {d["series_id"]: d for d in docs if d.get("series_id") is not None}
+
+        result = []
+        for doc in reactions:
+            sid = doc.get("series_id")
+            if sid in series_map:
+                entry = dict(series_map[sid])
+                entry["reaction"] = doc.get("reaction")
+                entry["updated_at"] = doc.get("updated_at")
+                result.append(entry)
+        return result, None
+    except Exception as exc:
+        return [], f"Could not load reactions: {exc}"
+    finally:
+        manager.close()
+
+
+def set_reaction(user_id: str, series_id: int, reaction: str) -> Tuple[bool, Optional[str]]:
+    manager, err = _connect()
+    if err:
+        return False, err
+    try:
+        from database.interactions import InteractionManager
+        im = InteractionManager(manager)
+        im.set_reaction(user_id, series_id, reaction)
+        # Log the interaction event so the adaptive ranker gets the reward
+        # signal. love/like/dislike map to their reward-weighted event types.
+        try:
+            from database.interaction_events import InteractionEventManager
+            iem = InteractionEventManager(manager)
+            iem.log_event(user_id, reaction, series_id=series_id)
+        except Exception as exc:
+            logger.error("Failed to log reaction event for user %s: %s", user_id, exc)
+        return True, None
+    except Exception as exc:
+        return False, f"Could not set reaction: {exc}"
+    finally:
+        manager.close()
+
+
+def clear_reaction(user_id: str, series_id: int) -> Tuple[bool, Optional[str]]:
+    manager, err = _connect()
+    if err:
+        return False, err
+    try:
+        from database.interactions import InteractionManager
+        im = InteractionManager(manager)
+        im.clear_reaction(user_id, series_id)
+        return True, None
+    except Exception as exc:
+        return False, f"Could not clear reaction: {exc}"
     finally:
         manager.close()
 

@@ -8,11 +8,11 @@ A data-science-powered web-series discovery and recommendation platform that hel
 
 - **Smart Search** — Search by title with exact-match priority; ambiguous titles (e.g. "Money Heist") show multiple candidates for the user to pick
 - **Content-Based Recommendations** — TF-IDF + cosine similarity + semantic embeddings on summary, genres, cast, and network
-- **Personalized Recommendations** — Weighted preference vector from likes, watchlist, and recently-viewed history, reranked with an adaptive LinUCB contextual bandit
+- **Personalized Recommendations** — Weighted preference vector from **Like / Love / Not For Me** reactions, watchlist, and recently-viewed history, reranked with an adaptive LinUCB contextual bandit
 - **"Why This?" Explanations** — Every recommendation comes with a plain-language reason based on overlapping metadata
 - **Where to Watch** — Streaming provider availability via TMDb (Netflix, Prime, etc.) with legitimate "Watch Now" links
 - **Watchlist** — Save and manage your personal watchlist (persisted in MongoDB)
-- **Likes & Recently Viewed** — Track what you enjoy to sharpen recommendations
+- **Like / Love / Not For Me** — Tell us exactly how you feel. NOT FOR ME actively suppresses rejected titles (and similar ones) from your recommendations
 - **Surprise Me** — One-click random series pick from the catalog
 - **Dynamic Visual Theme** — Cinematic dark themes with smooth transitions
 
@@ -47,7 +47,7 @@ MongoDB ──> Data Access Layer ──> FastAPI ──> React SPA
 
 ### Data Model
 
-Each series document in the `series` collection is keyed by a unique `series_id` and stores: name, summary, genres, rating, language, premiere/end dates, status, network/web_channel, cast, and imagery. Per-user collections (`watchlist`, `likes`, `recently_viewed`, `interaction_events`) reference series by `series_id`.
+Each series document in the `series` collection is keyed by a unique `series_id` and stores: name, summary, genres, rating, language, premiere/end dates, status, network/web_channel, cast, and imagery. Per-user collections (`watchlist`, `likes`, `recently_viewed`, `interaction_events`) reference series by `series_id`. The unified `interactions` collection stores one LIKE/LOVE/NOT-FOR-ME reaction per (user, series).
 
 ---
 
@@ -67,6 +67,7 @@ BingeFinder/
 │   ├── mongo_client.py       # MongoDB persistence layer
 │   ├── watchlist.py          # Watchlist operations
 │   ├── likes.py              # Like operations
+│   ├── interactions.py       # Unified LIKE/LOVE/NOT-FOR-ME reactions
 │   ├── recently_viewed.py    # Recently-viewed operations
 │   └── interaction_events.py # Reward/event logging for the bandit
 ├── recommender/
@@ -104,7 +105,7 @@ For each series, a "content soup" is built from:
 
 The `TfidfVectorizer` (max_features=20000, English stop words) converts these soups into a sparse matrix, and a sentence-transformer model produces dense semantic embeddings. A weighted combination of cosine similarities scores every series against the query, and the top-N results are returned ranked by genuine relevance score (0.0 to 1.0).
 
-**Personalization + Adaptive Ranking** — A user's likes, watchlist, and recently-viewed history are weighted (3.0 / 2.0 / 1.0) into a combined preference vector. Candidate recommendations are then reranked by a **LinUCB contextual bandit** trained on interaction events, so the system continuously adapts to what the user actually engages with.
+**Personalization + Adaptive Ranking** — A user's reactions, watchlist, and recently-viewed history are weighted (LOVE 5.0 / LIKE 3.0 / watchlist 2.0 / viewed 1.0) into a combined preference vector. NOT FOR ME titles are excluded from recommendations and their genres down-weighted so similar content is pushed lower. Candidate recommendations are then reranked by a **LinUCB contextual bandit** trained on interaction events, so the system continuously adapts to what the user actually engages with.
 
 ---
 
@@ -164,7 +165,7 @@ cp .env.example .env
 
 ### 1. MongoDB
 
-Start MongoDB (local default `mongodb://127.0.0.1:27017/`). The `series`, `watchlist`, `likes`, `recently_viewed`, and `interaction_events` collections live in the configured database.
+Start MongoDB (local default `mongodb://127.0.0.1:27017/`). The `series`, `watchlist`, `likes`, `interactions`, `recently_viewed`, and `interaction_events` collections live in the configured database.
 
 ### 2. Backend
 

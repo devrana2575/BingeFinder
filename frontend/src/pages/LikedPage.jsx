@@ -17,8 +17,8 @@ export default function LikedPage() {
   const load = useCallback(() => {
     setLoading(true);
     setError(null);
-    api.likes()
-      .then(d => setSeries(d))
+    api.reactions()
+      .then(d => setSeries((d || []).filter(i => i.reaction === 'love' || i.reaction === 'like')))
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
   }, []);

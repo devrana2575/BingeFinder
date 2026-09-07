@@ -48,11 +48,13 @@ REWARD_WEIGHTS: Dict[str, float] = {
     # Positive signals
     "view_details": 1.0,
     "like": 3.0,
+    "love": 5.0,
     "watchlist_add": 4.0,
     "provider_click": 4.0,
     "return_visit": 3.0,
     # Negative signals
     "unlike": -3.0,
+    "dislike": -6.0,
     "watchlist_remove": -4.0,
     "skip": -1.0,
     "dismiss": -2.0,

@@ -21,6 +21,8 @@ class SeriesSummary(BaseModel):
     # Free-availability hint for the "Free Tonight" rail (product-level only).
     free_tier: Optional[str] = None
     free_provider_names: List[str] = []
+    # User reaction for this series when returned from /user/reactions only.
+    reaction: Optional[str] = None
 
 
 class SeriesDetail(BaseModel):

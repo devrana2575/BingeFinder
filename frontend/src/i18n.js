@@ -13,25 +13,6 @@
 
 export const LOCALES = ['en'];
 
-let messages = LOCALE_EN;
-
-export function setLocale(locale) {
-  const table = { en: LOCALE_EN }[locale] || LOCALE_EN;
-  messages = table;
-}
-
-function interpolate(template, vars) {
-  if (!vars) return template;
-  return template.replace(/\{(\w+)\}/g, (_, k) => (vars[k] != null ? String(vars[k]) : `{${k}}`));
-}
-
-export function t(key, vars) {
-  const template = messages[key] ?? key;
-  return interpolate(template, vars);
-}
-
-export const STRINGS = LOCALE_EN;
-
 const LOCALE_EN = {
   'brand.name': 'BingeFinder',
 
@@ -180,3 +161,22 @@ const LOCALE_EN = {
   'notFound.message': 'The page you\'re looking for doesn\'t exist.',
   'notFound.home': 'Go home',
 };
+
+let messages = LOCALE_EN;
+
+export function setLocale(locale) {
+  const table = { en: LOCALE_EN }[locale] || LOCALE_EN;
+  messages = table;
+}
+
+function interpolate(template, vars) {
+  if (!vars) return template;
+  return template.replace(/\{(\w+)\}/g, (_, k) => (vars[k] != null ? String(vars[k]) : `{${k}}`));
+}
+
+export function t(key, vars) {
+  const template = messages[key] ?? key;
+  return interpolate(template, vars);
+}
+
+export const STRINGS = LOCALE_EN;

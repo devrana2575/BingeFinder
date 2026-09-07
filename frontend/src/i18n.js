@@ -30,7 +30,8 @@ const LOCALE_EN = {
   'auth.signup': 'Sign Up',
 
   'hero.title': "What's your next binge?",
-  'hero.subtitle': 'Search {count}+ series or let us find something for you.',
+  'hero.subtitle': 'Search {count} series or let us find something for you.',
+  'hero.subtitleNoCount': 'Search our full catalog or let us find something for you.',
   'hero.searchLabel': 'Search for a series',
   'hero.searchPlaceholder': 'Search for a series...',
   'hero.searchButton': 'Search',

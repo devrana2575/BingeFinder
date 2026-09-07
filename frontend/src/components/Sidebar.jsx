@@ -1,6 +1,5 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
-import RegionSelector from './RegionSelector';
 import { t } from '../i18n';
 
 export default function Sidebar({ onNavigate }) {
@@ -42,7 +41,6 @@ export default function Sidebar({ onNavigate }) {
         {nav('/', t('nav.home'))}
         {nav('/discover', t('nav.discover'))}
         {nav('/surprise', t('nav.surprise'))}
-        {nav('/settings', t('nav.settings'))}
       </nav>
 
       {isAuth && (
@@ -58,7 +56,6 @@ export default function Sidebar({ onNavigate }) {
       )}
 
       <div className="mt-auto pt-4 border-t border-border">
-        <RegionSelector />
         {isAuth ? (
           <div className="flex items-center justify-between gap-2 mt-2">
             <span className="text-sm text-text-secondary truncate min-w-0">{user?.name}</span>

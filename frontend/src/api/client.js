@@ -14,7 +14,11 @@ async function request(path, options = {}) {
 
   const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
 
-  if (res.status === 401) {
+  // A 401 during an authenticated request means a stale/expired session.
+  // Skip the redirect for the auth endpoints themselves (a failed login with
+  // the wrong password is a normal 401, not a session-expiry signal).
+  const isAuthEndpoint = path.startsWith('/auth/');
+  if (res.status === 401 && !isAuthEndpoint) {
     localStorage.removeItem('bf_token');
     window.location.href = '/login';
     throw new Error('Session expired. Please log in again.');
@@ -24,7 +28,16 @@ async function request(path, options = {}) {
     let detail = res.statusText;
     try {
       const body = await res.json();
-      detail = body.detail || body.message || detail;
+      const raw = body.detail ?? body.message;
+      if (Array.isArray(raw)) {
+        // FastAPI validation errors carry {type, loc, msg} entries. Surface
+        // the human-readable messages joined together, not the raw array
+        // (which stringifies to "[object Object]").
+        const parts = raw.map(e => e.msg || String(e)).filter(Boolean);
+        detail = parts.length ? parts.join(' ') : res.statusText;
+      } else if (raw != null) {
+        detail = typeof raw === 'string' ? raw : JSON.stringify(raw);
+      }
     } catch {}
     throw new Error(detail);
   }

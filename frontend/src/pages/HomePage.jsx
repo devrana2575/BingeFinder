@@ -4,6 +4,7 @@ import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useRegion } from '../context/RegionContext';
 import { t } from '../i18n';
+import RegionSelector from '../components/RegionSelector';
 import SeriesGrid from '../components/SeriesGrid';
 import { SkeletonGrid } from '../components/Skeletons';
 import ErrorState from '../components/ErrorState';
@@ -12,18 +13,11 @@ import EmptyState from '../components/EmptyState';
 function HeroSection() {
   const [query, setQuery] = useState('');
   const navigate = useNavigate();
-  const [catalogTotal, setCatalogTotal] = useState(null);
-
-  useEffect(() => {
-    api.catalogCount().then(d => setCatalogTotal(d.total || 0)).catch(() => {});
-  }, []);
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (query.trim()) navigate(`/discover?q=${encodeURIComponent(query.trim())}`);
   };
-
-  const countLabel = catalogTotal != null ? catalogTotal.toLocaleString() : '3,500';
 
   return (
     <section className="rounded-2xl border border-border bg-surface p-8 sm:p-12 mb-8">
@@ -31,7 +25,7 @@ function HeroSection() {
         {t('hero.title')}
       </h1>
       <p className="text-text-muted text-sm mb-6 max-w-lg">
-        {t('hero.subtitle', { count: countLabel })}
+        {t('hero.subtitleNoCount')}
       </p>
       <form onSubmit={handleSubmit} className="flex gap-3 max-w-lg">
         <label htmlFor="hero-search" className="sr-only">{t('hero.searchLabel')}</label>
@@ -160,6 +154,14 @@ export default function HomePage() {
 
   return (
     <div>
+      {isAuth && (
+        <div className="flex justify-end mb-4">
+          <div className="rounded-lg border border-border bg-surface">
+            <RegionSelector />
+          </div>
+        </div>
+      )}
+
       <HeroSection />
       <MoodSlider />
 

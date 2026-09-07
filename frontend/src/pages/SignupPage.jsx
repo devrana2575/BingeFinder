@@ -21,8 +21,8 @@ export default function SignupPage() {
       setError('Passwords do not match.');
       return;
     }
-    if (password.length < 6) {
-      setError('Password must be at least 6 characters.');
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters.');
       return;
     }
     setLoading(true);
@@ -64,7 +64,7 @@ export default function SignupPage() {
           <label htmlFor="signup-password" className="block text-sm font-medium text-text-secondary mb-1">Password</label>
           <div className="relative">
             <input id="signup-password" type={showPw ? 'text' : 'password'} value={password} onChange={e => setPassword(e.target.value)}
-                   placeholder="Min 6 characters" required minLength={6} autoComplete="new-password"
+                   placeholder="Min 8 characters" required minLength={8} autoComplete="new-password"
                    className="w-full px-3 py-2.5 pr-12 rounded-lg bg-surface border border-border text-text text-sm placeholder:text-text-muted focus:border-accent" />
             <button type="button" onClick={() => setShowPw(!showPw)}
                     className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-text-muted hover:text-text-secondary">
@@ -75,7 +75,7 @@ export default function SignupPage() {
         <div>
           <label htmlFor="signup-confirm" className="block text-sm font-medium text-text-secondary mb-1">Confirm Password</label>
           <input id="signup-confirm" type="password" value={confirm} onChange={e => setConfirm(e.target.value)}
-                 placeholder="Repeat your password" required minLength={6} autoComplete="new-password"
+                 placeholder="Repeat your password" required minLength={8} autoComplete="new-password"
                  className="w-full px-3 py-2.5 rounded-lg bg-surface border border-border text-text text-sm placeholder:text-text-muted focus:border-accent" />
         </div>
         <button type="submit" disabled={loading}

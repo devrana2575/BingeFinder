@@ -6,7 +6,10 @@ import { t } from '../i18n';
 
 export default function SeriesCard({ series, relevanceScore, showFreeHint, onRemove, removeLabel }) {
   const id = series.series_id;
-  const title = series.name || t('card.untitled');
+  // Recommendation endpoints return `title`; catalog/search/discovery return
+  // `name`. Never render a placeholder like "Untitled" when a title exists
+  // under either key.
+  const title = series.name || series.title || t('card.untitled');
   const year = series.premiered ? series.premiered.slice(0, 4) : null;
   const score = relevanceScore ?? series.relevance_score;
   const freeTier = series.free_tier;

@@ -14,7 +14,6 @@ import LikedPage from './pages/LikedPage';
 import RecentlyViewedPage from './pages/RecentlyViewedPage';
 import ForYouPage from './pages/ForYouPage';
 import VibesFilterPage from './pages/VibesFilterPage';
-import SettingsPage from './pages/SettingsPage';
 import NotFoundPage from './pages/NotFoundPage';
 
 export default function App() {
@@ -34,7 +33,6 @@ export default function App() {
               <Route path="liked" element={<LikedPage />} />
               <Route path="recently-viewed" element={<RecentlyViewedPage />} />
               <Route path="for-you" element={<ForYouPage />} />
-              <Route path="settings" element={<SettingsPage />} />
               <Route path="login" element={<LoginPage />} />
               <Route path="signup" element={<SignupPage />} />
               <Route path="*" element={<NotFoundPage />} />

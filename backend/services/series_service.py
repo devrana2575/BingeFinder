@@ -46,6 +46,26 @@ def get_all_series() -> Tuple[List[Dict[str, Any]], Optional[str]]:
         manager.close()
 
 
+def derive_anime_content_types() -> Tuple[int, Optional[str]]:
+    """
+    Backfill `content_type="anime"` onto catalog documents that carry an
+    "Anime" genre (the TVMaze classification) but were ingested before
+    content types existed. Idempotent — only documents whose stored type is
+    still the TV default are updated. Returns the matched count.
+    """
+    manager, err = _connect()
+    if err:
+        return 0, err
+    try:
+        matched = manager.series.update_many(
+            {"genres": "Anime", "content_type": "tv_series"},
+            {"$set": {"content_type": "anime"}},
+        )
+        return matched.matched_count, None
+    finally:
+        manager.close()
+
+
 def get_series_by_id(series_id: int) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
     manager, err = _connect()
     if err:

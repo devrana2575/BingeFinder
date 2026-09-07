@@ -123,7 +123,7 @@ def normalize_tvmaze_row(row: Dict[str, Any]) -> Dict[str, Any]:
 
     doc: Dict[str, Any] = {
         "series_id": series_id,
-        "content_type": "tv_series",
+        "content_type": "anime" if "Anime" in [g for g in row.get("genres") or [] if isinstance(g, str)] else "tv_series",
         "name": _ext("name"),
         "summary": strip_html(row.get("summary")),
         "genres": [g for g in row.get("genres") or [] if isinstance(g, str)] or [],

@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { RegionProvider } from './context/RegionContext';
+import { ToastProvider } from './context/ToastContext';
 import Layout from './components/Layout';
 import HomePage from './pages/HomePage';
 import DiscoverPage from './pages/DiscoverPage';
@@ -21,8 +22,9 @@ export default function App() {
     <BrowserRouter>
       <AuthProvider>
         <RegionProvider>
-          <Routes>
-            <Route element={<Layout />}>
+          <ToastProvider>
+            <Routes>
+              <Route element={<Layout />}>
               <Route index element={<HomePage />} />
               <Route path="discover" element={<DiscoverPage />} />
               <Route path="discover/vibes/:key" element={<VibesFilterPage />} />
@@ -38,6 +40,7 @@ export default function App() {
               <Route path="*" element={<NotFoundPage />} />
             </Route>
           </Routes>
+          </ToastProvider>
         </RegionProvider>
       </AuthProvider>
     </BrowserRouter>

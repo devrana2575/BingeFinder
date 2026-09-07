@@ -4,7 +4,7 @@ import RatingBadge from './RatingBadge';
 import GenreTags from './GenreTags';
 import { t } from '../i18n';
 
-export default function SeriesCard({ series, relevanceScore, showFreeHint }) {
+export default function SeriesCard({ series, relevanceScore, showFreeHint, onRemove, removeLabel }) {
   const id = series.series_id;
   const title = series.name || t('card.untitled');
   const year = series.premiered ? series.premiered.slice(0, 4) : null;
@@ -17,6 +17,19 @@ export default function SeriesCard({ series, relevanceScore, showFreeHint }) {
     <div className="group bg-surface border border-border rounded-xl overflow-hidden flex flex-col transition-colors duration-150 hover:border-border-hover">
       <Link to={`/series/${id}`} className="block relative aspect-[2/3] bg-surface-2">
         <PosterImage src={series.image} title={title} />
+        {onRemove && (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.preventDefault();
+              onRemove(series);
+            }}
+            aria-label={removeLabel || 'Remove'}
+            className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/70 text-text border border-border hover:border-danger hover:text-danger flex items-center justify-center text-sm transition-colors"
+          >
+            {'\u00d7'}
+          </button>
+        )}
         {showFreeHint && (freeTier === 'free' || freeTier === 'free_with_ads') && (
           <span
             className={`absolute top-2 left-2 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${

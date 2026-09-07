@@ -105,6 +105,18 @@ const LOCALE_EN = {
   'detail.addWatchlist': '+ Watchlist',
   'detail.liked': 'Liked',
   'detail.like': 'Like',
+
+  'action.addedToWatchlist': 'Added to your watchlist.',
+  'action.removedFromWatchlist': 'Removed from your watchlist.',
+  'action.liked': 'Saved to Likes.',
+  'action.unliked': 'Removed from Likes.',
+  'action.genericError': 'That could not be completed. Please try again.',
+  'action.remove': 'Remove',
+  'action.cancel': 'Cancel',
+  'action.loginRequired': 'Log in to keep your lists and get personalized picks.',
+  'confirm.removeTitle': 'Remove from your list?',
+  'confirm.removeWatchlistMsg': 'This will remove it from your watchlist. You can add it back anytime.',
+  'toast.dismiss': 'Dismiss',
   'detail.seriesNotFound': 'Series not found.',
 
   'region.label': 'Your region',

@@ -3,6 +3,7 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useRegion } from '../context/RegionContext';
+import { useToast } from '../context/ToastContext';
 import { t } from '../i18n';
 import PosterImage from '../components/PosterImage';
 import RatingBadge from '../components/RatingBadge';
@@ -16,6 +17,7 @@ export default function SeriesDetailPage() {
   const { id } = useParams();
   const { isAuth } = useAuth();
   const { region } = useRegion();
+  const toast = useToast();
   const navigate = useNavigate();
 
   const [series, setSeries] = useState(null);
@@ -66,36 +68,48 @@ export default function SeriesDetailPage() {
   }, [isAuth, series?.series_id]);
 
   const toggleWatchlist = async () => {
-    if (!isAuth) return navigate('/login');
+    if (!isAuth) {
+      toast.info(t('action.loginRequired'));
+      return navigate('/login');
+    }
     const prev = inWatchlist;
     setInWatchlist(!prev);
     try {
       if (prev) {
         await api.removeWatchlist(series.series_id);
         api.recordEvent({ series_id: series.series_id, event_type: 'watchlist_remove' }).catch(() => {});
+        toast.info(t('action.removedFromWatchlist'));
       } else {
         await api.addWatchlist(series.series_id);
         api.recordEvent({ series_id: series.series_id, event_type: 'watchlist_add' }).catch(() => {});
+        toast.success(t('action.addedToWatchlist'));
       }
     } catch {
       setInWatchlist(prev);
+      toast.error(t('action.genericError'));
     }
   };
 
   const toggleLike = async () => {
-    if (!isAuth) return navigate('/login');
+    if (!isAuth) {
+      toast.info(t('action.loginRequired'));
+      return navigate('/login');
+    }
     const prev = isLiked;
     setIsLiked(!prev);
     try {
       if (prev) {
         await api.unlike(series.series_id);
         api.recordEvent({ series_id: series.series_id, event_type: 'unlike' }).catch(() => {});
+        toast.info(t('action.unliked'));
       } else {
         await api.like(series.series_id);
         api.recordEvent({ series_id: series.series_id, event_type: 'like' }).catch(() => {});
+        toast.success(t('action.liked'));
       }
     } catch {
       setIsLiked(prev);
+      toast.error(t('action.genericError'));
     }
   };
 

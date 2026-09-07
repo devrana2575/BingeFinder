@@ -1,6 +1,6 @@
 import SeriesCard from './SeriesCard';
 
-export default function SeriesGrid({ series, relevanceScores, showFreeHint }) {
+export default function SeriesGrid({ series, relevanceScores, showFreeHint, onRemove, removeLabel }) {
   if (!series || series.length === 0) {
     return null;
   }
@@ -16,6 +16,8 @@ export default function SeriesGrid({ series, relevanceScores, showFreeHint }) {
             series={s}
             relevanceScore={score}
             showFreeHint={showFreeHint}
+            onRemove={onRemove}
+            removeLabel={removeLabel}
           />
         );
       })}

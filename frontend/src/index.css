@@ -98,6 +98,25 @@ h1, h2, h3, h4, h5, h6 {
   color: var(--color-accent);
 }
 
+.btn-danger {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem 1.25rem;
+  border-radius: 9999px;
+  font-size: 0.875rem;
+  font-weight: 700;
+  color: #ffffff;
+  background: var(--color-danger);
+  transition: filter 0.15s ease, transform 0.15s ease;
+}
+.btn-danger:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+}
+.btn-danger:active { transform: translateY(0); }
+.btn-danger:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+
 .card-grid {
   display: grid;
   gap: 1rem;
@@ -125,7 +144,23 @@ h1, h2, h3, h4, h5, h6 {
 
 input:focus-visible,
 select:focus-visible,
-button:focus-visible {
-  outline: 2px solid var(--color-accent);
+button:focus-visible,
+a:focus-visible,
+[tabindex]:focus-visible {
+  outline: 2px solid var(--color-accent-light);
   outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+  .skeleton {
+    background: var(--color-surface-2);
+  }
 }

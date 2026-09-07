@@ -9,6 +9,7 @@ import SurprisePage from './pages/SurprisePage';
 import SeriesDetailPage from './pages/SeriesDetailPage';
 import LoginPage from './pages/LoginPage';
 import SignupPage from './pages/SignupPage';
+import OnboardingPage from './pages/OnboardingPage';
 import WatchlistPage from './pages/WatchlistPage';
 import LikedPage from './pages/LikedPage';
 import RecentlyViewedPage from './pages/RecentlyViewedPage';
@@ -33,6 +34,7 @@ export default function App() {
               <Route path="liked" element={<LikedPage />} />
               <Route path="recently-viewed" element={<RecentlyViewedPage />} />
               <Route path="for-you" element={<ForYouPage />} />
+              <Route path="onboarding" element={<OnboardingPage />} />
               <Route path="login" element={<LoginPage />} />
               <Route path="signup" element={<SignupPage />} />
               <Route path="*" element={<NotFoundPage />} />

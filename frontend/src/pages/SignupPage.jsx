@@ -28,7 +28,7 @@ export default function SignupPage() {
     setLoading(true);
     try {
       await signup(name, email, password);
-      navigate('/');
+      navigate('/onboarding');
     } catch (err) {
       setError(err.message);
     } finally {

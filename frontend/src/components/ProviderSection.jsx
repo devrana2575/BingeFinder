@@ -68,26 +68,40 @@ export default function ProviderSection({ providers, justwatchUrl, watchNowUrl, 
   const emptyResult = status === 'ok' && free.length === 0 && ads.length === 0
     && flatrate.length === 0 && rent.length === 0 && buy.length === 0;
 
+  // Keyless fallback: when structured watch-availability isn't configured or
+  // temporarily fails, still give the user a real, region-aware JustWatch page
+  // to verify where a title is free. Real data, never fabricated — the deep
+  // link is derived from the title + region.
+  const JustWatchFallback = ({ message }) => (
+    <section className="rounded-xl border border-border bg-surface p-5 mb-8">
+      <div className="flex items-baseline justify-between mb-3">
+        <h2 className="text-base font-semibold text-text">{t('detail.watchProviderTitle')}</h2>
+        <span className="text-xs text-text-muted">{regionLabel}</span>
+      </div>
+      <p className="text-sm text-text-muted mb-4">{message}</p>
+      {justwatchUrl && (
+        <a
+          href={justwatchUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={() => {
+            if (seriesId) api.recordEvent({ series_id: seriesId, event_type: 'provider_click' }).catch(() => {});
+          }}
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-bg bg-free hover:opacity-90 transition-opacity"
+        >
+          {t('detail.justwatchAvailability', { region: regionLabel })}
+        </a>
+      )}
+      <p className="text-xs text-text-muted mt-3">{t('detail.justwatchHint')}</p>
+    </section>
+  );
+
   if (isNotConfigured) {
-    return (
-      <section className="rounded-xl border border-border bg-surface p-5 mb-8">
-        <h2 className="text-base font-semibold text-text mb-3">{t('detail.watchProviderTitle')}</h2>
-        <p className="text-sm text-text-muted">
-          {t('detail.watchProviderNotConfigured')}
-        </p>
-      </section>
-    );
+    return <JustWatchFallback message={t('detail.watchProviderNotConfigured')} />;
   }
 
   if (isError) {
-    return (
-      <section className="rounded-xl border border-border bg-surface p-5 mb-8">
-        <h2 className="text-base font-semibold text-text mb-3">{t('detail.watchProviderTitle')}</h2>
-        <p className="text-sm text-text-muted">
-          {t('detail.watchProviderError')}
-        </p>
-      </section>
-    );
+    return <JustWatchFallback message={t('detail.watchProviderError')} />;
   }
 
   if (isLoading) {

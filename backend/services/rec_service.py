@@ -92,6 +92,8 @@ def get_personalized_recommendations(
 
     weighted_ids: Dict[int, float] = {}
     service_ids: List[int] = []
+    # Explicit genre tastes (onboarding quiz / settings), lower-cased.
+    pref_genres: set = set()
     # Titles the user has explicitly rejected (NOT FOR ME). Actively
     # suppressed — never recommended and used to downweight similar content.
     disliked_set: set = set()
@@ -107,6 +109,10 @@ def get_personalized_recommendations(
             int(s) for s in (preferences.get("services") or [])
             if isinstance(s, int) or str(s).isdigit()
         ]
+        # Stated genre tastes from the onboarding quiz. Folded into the hybrid
+        # score so a freshly-onboarded user (few/no interactions) still gets
+        # taste-aligned picks, not only the interaction-derived vector.
+        pref_genres = {str(g).strip().lower() for g in (preferences.get("genres") or []) if g}
 
         im = InteractionManager(manager)
         for sid, reaction in im.get_reaction_map(user_id).items():
@@ -201,7 +207,14 @@ def get_personalized_recommendations(
         cand_id = series_ids[row]
         cand_meta = metadata.get(cand_id, {})
         cand_genres = cand_meta.get("genres_set", set())
-        genre_scores[i] = _genre_jaccard(set(), cand_genres)
+        # Explicit genre preferences (onboarding) seed the genre signal so
+        # taste-aligned titles rank higher even before the user has a rich
+        # interaction history. With no preferences this stays the neutral base.
+        if pref_genres:
+            cand_lower = {str(g).lower() for g in cand_genres}
+            genre_scores[i] = _genre_jaccard(pref_genres, cand_lower)
+        else:
+            genre_scores[i] = _genre_jaccard(set(), cand_genres)
         if disliked_genres and cand_genres:
             overlap = len(cand_genres & disliked_genres)
             if overlap > 0:

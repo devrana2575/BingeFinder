@@ -39,6 +39,9 @@ export default function Sidebar({ onNavigate }) {
 
       <nav className="flex flex-col gap-0.5" aria-label="Primary navigation">
         {nav('/', t('nav.home'))}
+        {nav('/series', t('nav.series'))}
+        {nav('/movies', t('nav.movies'))}
+        {nav('/anime', t('nav.anime'))}
         {nav('/discover', t('nav.discover'))}
         {nav('/surprise', t('nav.surprise'))}
       </nav>

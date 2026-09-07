@@ -98,9 +98,20 @@ def _load_catalog():
     return docs
 
 
+def _catalog_for_type(docs: List[Dict[str, Any]], content_type: Optional[str]) -> List[Dict[str, Any]]:
+    """Scope a catalog to one content type (legacy docs count as tv_series)."""
+    if not content_type:
+        return docs
+    return [d for d in docs if (d.get("content_type") or "tv_series") == content_type]
+
+
+def _rail(content_type: Optional[str]) -> List[Dict[str, Any]]:
+    return _catalog_for_type(_load_catalog(), content_type)
+
+
 @router.get("/tonights-binge", response_model=List[SeriesSummary])
-def tonights_binge():
-    docs = _load_catalog()
+def tonights_binge(content_type: Optional[str] = None):
+    docs = _rail(content_type)
     tonights = discovery_service.get_tonights_binge(docs, seen_ids=_seen_ids)
     for d in tonights:
         tid = d.get("series_id")
@@ -110,8 +121,8 @@ def tonights_binge():
 
 
 @router.get("/trending", response_model=List[SeriesSummary])
-def trending():
-    docs = _load_catalog()
+def trending(content_type: Optional[str] = None):
+    docs = _rail(content_type)
     items = discovery_service.get_trending(docs, seen_ids=_seen_ids)
     for d in items:
         tid = d.get("series_id")
@@ -121,22 +132,22 @@ def trending():
 
 
 @router.get("/new-noteworthy", response_model=List[SeriesSummary])
-def new_noteworthy():
-    docs = _load_catalog()
+def new_noteworthy(content_type: Optional[str] = None):
+    docs = _rail(content_type)
     items = discovery_service.get_new_and_noteworthy(docs)
     return [_doc_to_summary(d) for d in items]
 
 
 @router.get("/hidden-gems", response_model=List[SeriesSummary])
-def hidden_gems():
-    docs = _load_catalog()
+def hidden_gems(content_type: Optional[str] = None):
+    docs = _rail(content_type)
     gems = discovery_service.get_hidden_gems(docs)
     return [_doc_to_summary(d) for d in gems]
 
 
 @router.get("/free-tonight", response_model=List[SeriesSummary])
-def free_tonight(region: Optional[str] = None):
-    docs = _load_catalog()
+def free_tonight(region: Optional[str] = None, content_type: Optional[str] = None):
+    docs = _rail(content_type)
     free = discovery_service.get_free_to_watch(docs, limit=6, region=region)
     return [_doc_to_summary(d) for d in free]
 

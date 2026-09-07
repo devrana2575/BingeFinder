@@ -62,13 +62,28 @@ export const api = {
   regions: () => request('/regions'),
   resolveRegion: (code) => request(`/regions/${code}`),
 
-  tonightsBinge: () => request('/discover/tonights-binge'),
-  trending: () => request('/discover/trending'),
-  newNoteworthy: () => request('/discover/new-noteworthy'),
-  hiddenGems: () => request('/discover/hidden-gems'),
-  freeTonight: (region) => {
-    const qs = region ? `?region=${encodeURIComponent(region)}` : '';
-    return request(`/discover/free-tonight${qs}`);
+  tonightsBinge: (contentType) => {
+    const qs = contentType ? `?content_type=${encodeURIComponent(contentType)}` : '';
+    return request(`/discover/tonights-binge${qs}`);
+  },
+  trending: (contentType) => {
+    const qs = contentType ? `?content_type=${encodeURIComponent(contentType)}` : '';
+    return request(`/discover/trending${qs}`);
+  },
+  newNoteworthy: (contentType) => {
+    const qs = contentType ? `?content_type=${encodeURIComponent(contentType)}` : '';
+    return request(`/discover/new-noteworthy${qs}`);
+  },
+  hiddenGems: (contentType) => {
+    const qs = contentType ? `?content_type=${encodeURIComponent(contentType)}` : '';
+    return request(`/discover/hidden-gems${qs}`);
+  },
+  freeTonight: (region, contentType) => {
+    const params = new URLSearchParams();
+    if (region) params.set('region', region);
+    if (contentType) params.set('content_type', contentType);
+    const qs = params.toString();
+    return request(`/discover/free-tonight${qs ? `?${qs}` : ''}`);
   },
   surprise: () => request('/discover/surprise'),
   vibes: () => request('/discover/vibes'),

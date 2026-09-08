@@ -21,7 +21,7 @@ import unicodedata
 from typing import Any, Dict, Optional
 
 from api.tmdb import TMDbAPIError, TMDbClient
-from config import ConfigError, get_tmdb_api_key
+from config import ConfigError
 from regions import DEFAULT_REGION, normalize_region
 from utils.logger import get_logger
 

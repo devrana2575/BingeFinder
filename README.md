@@ -155,9 +155,13 @@ cp .env.example .env
 |---|---|---|---|
 | `MONGODB_URI` | Yes | — | MongoDB connection URI |
 | `MONGODB_DATABASE` | Yes | — | MongoDB database name |
-| `TMDB_API_KEY` | Yes | — | TMDb API key (for watch providers) |
+| `TMDB_API_READ_ACCESS_TOKEN` | No\* | — | TMDb v4 read access token (Bearer auth) — catalog ingestion, watch providers, Free Tonight |
 | `LOG_LEVEL` | No | INFO | Logging verbosity |
 | `JWT_SECRET` | No | auto-gen | Secret for session tokens |
+
+\* Without a TMDb credential the app still runs; movie/Special ingestion,
+structured watch providers and Free Tonight are disabled (keyless JustWatch
+fallbacks still work for Where to Watch).
 
 ---
 
@@ -217,7 +221,7 @@ The model artifact is saved to `recommender/artifacts/` and auto-loads at API st
 
 The catalog grows via two idempotent, upsert-only ingesters (data is never wiped):
 
-- **TMDb ingest** (needs `TMDB_API_KEY`): incremental pull of TMDb TV list endpoints.
+- **TMDb ingest** (needs `TMDB_API_READ_ACCESS_TOKEN`): incremental pull of TMDb TV/movie list endpoints.
 
   ```bash
   python -m backend.services.catalog_ingest --pages 3 --enrich

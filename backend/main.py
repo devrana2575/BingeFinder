@@ -39,6 +39,14 @@ async def lifespan(app: FastAPI):
     except Exception as exc:
         logger.warning("Recommendation model not available: %s", exc)
 
+    # Warm the TMDb reachability breaker so TMDb-dependent routes never
+    # stall the first request on a connect timeout when the API is down.
+    try:
+        from backend.services.tmdb_reachability import tmdb_available
+        tmdb_available()
+    except Exception:
+        pass
+
     yield
 
     logger.info("BingeFinder API shutting down.")

@@ -181,11 +181,16 @@ def get_vibes_info() -> Dict[str, Dict]:
 
 def get_free_to_watch(docs: List[Dict], limit: int = 6, region: Optional[str] = None) -> List[Dict]:
     """Free/ads provider availability for sampled series, scoped to a region."""
+    from backend.services.tmdb_reachability import tmdb_available
+
     try:
         from config import is_tmdb_configured
         if not is_tmdb_configured():
             return []
     except Exception:
+        return []
+
+    if not tmdb_available():
         return []
 
     from regions import normalize_region
@@ -200,6 +205,7 @@ def get_free_to_watch(docs: List[Dict], limit: int = 6, region: Optional[str] = 
     sampled = random.sample(rated, sample_size) if sample_size > 0 else []
 
     free_series = []
+    consecutive_failures = 0
     for doc in sampled:
         if len(free_series) >= limit:
             break
@@ -212,9 +218,16 @@ def get_free_to_watch(docs: List[Dict], limit: int = 6, region: Optional[str] = 
                 region=effective_region,
             )
         except Exception:
+            consecutive_failures += 1
+            if consecutive_failures >= 2:
+                break
             continue
         if not providers_data or not providers_data.get("providers"):
+            consecutive_failures += 1
+            if consecutive_failures >= 2:
+                break
             continue
+        consecutive_failures = 0
         providers = providers_data["providers"]
         free = providers.get("free") or []
         ads = providers.get("ads") or []

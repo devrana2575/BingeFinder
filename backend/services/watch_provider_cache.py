@@ -29,6 +29,10 @@ def _cached_watch_providers(
     region: Optional[str] = None,
 ) -> dict:
     """Cached wrapper around get_watch_providers_for_series."""
+    from backend.services.tmdb_reachability import tmdb_available
+    if not tmdb_available():
+        return {}
+
     from regions import normalize_region
     effective_region = normalize_region(region)
 

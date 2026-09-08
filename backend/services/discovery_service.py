@@ -182,8 +182,9 @@ def get_vibes_info() -> Dict[str, Dict]:
 def get_free_to_watch(docs: List[Dict], limit: int = 6, region: Optional[str] = None) -> List[Dict]:
     """Free/ads provider availability for sampled series, scoped to a region."""
     try:
-        from config import get_tmdb_api_key
-        get_tmdb_api_key()
+        from config import is_tmdb_configured
+        if not is_tmdb_configured():
+            return []
     except Exception:
         return []
 

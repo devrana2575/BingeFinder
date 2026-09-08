@@ -23,10 +23,12 @@ from urllib3.util.retry import Retry
 
 from config import (
     BACKOFF_FACTOR,
+    ConfigError,
     MAX_RETRIES,
     REQUEST_TIMEOUT_SECONDS,
     TMDB_BASE_URL,
     get_tmdb_api_key,
+    get_tmdb_read_access_token,
 )
 from regions import DEFAULT_REGION, normalize_region
 from utils.logger import get_logger
@@ -47,18 +49,33 @@ class TMDbClient:
         trending = client.fetch_trending_tv()
     """
 
-    def __init__(self, api_key: Optional[str] = None) -> None:
+    def __init__(self, api_key: Optional[str] = None, read_access_token: Optional[str] = None) -> None:
         """
         Initialize the TMDb client.
 
+        Credentials resolve in this order:
+            1. Explicit `read_access_token` argument.
+            2. `TMDB_API_READ_ACCESS_TOKEN` env (authenticates with a
+               Bearer header; preferred when present).
+            3. Explicit `api_key` argument.
+            4. `TMDB_API_KEY` env (v3 `api_key` query parameter).
+
         Args:
-            api_key: Optional explicit API key. If not provided, the key is
-                read from the TMDB_API_KEY environment variable via config.
+            api_key: Optional explicit v3 API key.
+            read_access_token: Optional explicit v4 read access token.
 
         Raises:
-            ConfigError: If no API key is available anywhere.
+            ConfigError: If no API credential is available anywhere.
         """
-        self._api_key: str = api_key or get_tmdb_api_key()
+        self._api_key: Optional[str] = api_key
+        self._read_access_token: Optional[str] = read_access_token
+        if self._read_access_token is None:
+            try:
+                self._read_access_token = get_tmdb_read_access_token()
+            except ConfigError:
+                self._read_access_token = None
+        if self._api_key is None and not self._read_access_token:
+            self._api_key = get_tmdb_api_key()
         self._base_url: str = TMDB_BASE_URL
         self._session: requests.Session = self._build_session()
 
@@ -100,13 +117,20 @@ class TMDbClient:
                 returns a non-2xx status code / malformed JSON.
         """
         url = f"{self._base_url}{endpoint}"
-        query_params = {"api_key": self._api_key, "language": "en-US"}
+        headers: Dict[str, Any] = {}
+        query_params: Dict[str, Any] = {"language": "en-US"}
+        if self._read_access_token:
+            # v4 read-access tokens authenticate via a Bearer header and
+            # must NOT be sent as an api_key query param.
+            headers["Authorization"] = f"Bearer {self._read_access_token}"
+        else:
+            query_params["api_key"] = self._api_key
         if params:
             query_params.update(params)
 
         try:
             response = self._session.get(
-                url, params=query_params, timeout=REQUEST_TIMEOUT_SECONDS
+                url, params=query_params, headers=headers, timeout=REQUEST_TIMEOUT_SECONDS
             )
             response.raise_for_status()
             return response.json()

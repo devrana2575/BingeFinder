@@ -22,8 +22,9 @@ def get_watch_providers(
           {"error": "tmdb_key_missing"}  - availability service has no key
     """
     try:
-        from config import get_tmdb_api_key
-        get_tmdb_api_key()
+        from config import is_tmdb_configured
+        if not is_tmdb_configured():
+            return {"error": "tmdb_key_missing"}
     except Exception:
         return {"error": "tmdb_key_missing"}
 
@@ -59,8 +60,9 @@ def get_available_providers(region: Optional[str] = None) -> Dict[str, Any]:
           {"error": "provider_lookup_failed"} - availability request failed
     """
     try:
-        from config import get_tmdb_api_key
-        get_tmdb_api_key()
+        from config import is_tmdb_configured
+        if not is_tmdb_configured():
+            return {"error": "tmdb_key_missing"}
     except Exception:
         return {"error": "tmdb_key_missing"}
 

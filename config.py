@@ -92,6 +92,42 @@ def get_tmdb_api_key() -> str:
     return _get_required_env("TMDB_API_KEY")
 
 
+def get_tmdb_read_access_token() -> str:
+    """
+    Retrieve the TMDb v4 read access token from the environment.
+
+    When present, the TMDb client authenticates with
+    `Authorization: Bearer <token>` instead of the `api_key` query
+    parameter. Loaded lazily (not at import time) so unrelated modules
+    and tests don't require it.
+
+    Returns:
+        The TMDb read access token as a string.
+
+    Raises:
+        ConfigError: If TMDB_API_READ_ACCESS_TOKEN is not set.
+    """
+    return _get_required_env("TMDB_API_READ_ACCESS_TOKEN")
+
+
+def is_tmdb_configured() -> bool:
+    """
+    Whether any TMDb credential is available (v3 `api_key` OR v4 read
+    access token). Used to decide if structured availability/ingestion
+    features are live without raising.
+    """
+    try:
+        get_tmdb_api_key()
+        return True
+    except ConfigError:
+        pass
+    try:
+        get_tmdb_read_access_token()
+        return True
+    except ConfigError:
+        return False
+
+
 # ---------------------------------------------------------------------------
 # Networking / retry configuration
 # ---------------------------------------------------------------------------

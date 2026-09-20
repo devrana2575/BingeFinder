@@ -56,6 +56,12 @@ export const api = {
     Object.entries(params).forEach(([k, v]) => { if (v) qs.set(k, v); });
     return request(`/series/search?${qs.toString()}`);
   },
+  suggest: (q, contentType, limit = 8) => {
+    const params = new URLSearchParams({ q });
+    if (contentType) params.set('content_type', contentType);
+    if (limit) params.set('limit', limit);
+    return request(`/series/suggest?${params.toString()}`);
+  },
   filterOptions: () => request('/series/filters'),
   getSeries: (id) => request(`/series/${id}`),
 
@@ -90,9 +96,12 @@ export const api = {
   vibeFiltered: (key) => request(`/discover/vibes/${key}`),
 
   seriesRecs: (id) => request(`/series/${id}/recommendations`),
-  personalizedRecs: (region) => {
-    const qs = region ? `?region=${encodeURIComponent(region)}` : '';
-    return request(`/recommendations/personalized${qs}`);
+  personalizedRecs: (region, contentType) => {
+    const params = new URLSearchParams();
+    if (region) params.set('region', region);
+    if (contentType) params.set('content_type', contentType);
+    const qs = params.toString();
+    return request(`/recommendations/personalized${qs ? `?${qs}` : ''}`);
   },
 
   watchProviders: (id, region) => {

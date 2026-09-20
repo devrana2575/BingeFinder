@@ -59,7 +59,7 @@ def get_recommendations_for_series(
 
 
 def get_personalized_recommendations(
-    user_id: str, top_n: int = 12, region: Optional[str] = None
+    user_id: str, top_n: int = 12, region: Optional[str] = None, content_type: Optional[str] = None
 ) -> Tuple[List[Dict[str, Any]], Optional[str]]:
     """
     Generate personalized recommendations with adaptive ranking.
@@ -144,7 +144,7 @@ def get_personalized_recommendations(
     if not weighted_ids:
         # Cold start: no interaction history. Fall back to a quality-driven,
         # preference-aware pick instead of returning nothing.
-        return _cold_start_recommendations(user_id, top_n=top_n)
+        return _cold_start_recommendations(user_id, top_n=top_n, content_type=content_type)
 
     try:
         bundle = load_model()
@@ -167,7 +167,7 @@ def get_personalized_recommendations(
     if not user_rows:
         # Interaction history exists but none of it is in the trained model.
         # Keep the experience alive with the preference-aware fallback.
-        return _cold_start_recommendations(user_id, top_n=top_n)
+        return _cold_start_recommendations(user_id, top_n=top_n, content_type=content_type)
 
     weights = np.array(user_weights, dtype=np.float32)
     weights = weights / weights.sum()
@@ -183,6 +183,12 @@ def get_personalized_recommendations(
     excluded_set = interacted_set | disliked_set
     all_rows = np.arange(len(series_ids))
     mask = np.array([sid not in excluded_set for sid in series_ids])
+    if content_type:
+        ct_mask = np.array([
+            (metadata.get(sid, {}).get("content_type") or "tv_series") == content_type
+            for sid in series_ids
+        ])
+        mask = mask & ct_mask
     candidate_rows = all_rows[mask]
 
     if len(candidate_rows) == 0:
@@ -363,7 +369,7 @@ def _get_free_provider_counts(series_ids: List[int], region: Optional[str] = Non
 
 
 def _cold_start_recommendations(
-    user_id: str, top_n: int = 12, min_rating: float = 6.0
+    user_id: str, top_n: int = 12, min_rating: float = 6.0, content_type: Optional[str] = None
 ) -> Tuple[List[Dict[str, Any]], Optional[str]]:
     """
     Preference-aware cold-start picks for users without interaction history.
@@ -398,6 +404,9 @@ def _cold_start_recommendations(
     docs, err = get_all_series()
     if err:
         return [], err
+
+    if content_type:
+        docs = [d for d in docs if (d.get("content_type") or "tv_series") == content_type]
 
     qualified = [
         d for d in docs

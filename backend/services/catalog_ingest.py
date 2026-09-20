@@ -419,6 +419,8 @@ def run_catalog_update(
     manager: Any = None,
     client_factory: Any = None,
     content_type: str = "tv_series",
+    since_date: Optional[str] = None,
+    until_date: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     Fetch recent TMDb pages across the configured lists (for the chosen
@@ -427,6 +429,11 @@ def run_catalog_update(
     Never deletes or recreates data — it only inserts/updates. Rate-limit
     aware: sleeps `sleep_seconds` between page requests (the TMDb client
     adds automatic retry/backoff for 429/5xx).
+
+    When ``since_date`` (YYYY-MM-DD) is given, the run uses TMDb's
+    discover endpoint filtered to titles premiered/released at/after that
+    date (ranked by popularity) instead of the default list endpoints.
+    This is the "everything since <year>" catalog sweep.
 
     Args:
         pages_per_list: how many pages to pull per list endpoint.
@@ -438,6 +445,10 @@ def run_catalog_update(
         client_factory: optional callable returning a TMDbClient (for tests).
         content_type: "tv_series" or "movie" — picks the list endpoints,
             genre lookup and normalizer used for the run.
+        since_date: optional YYYY-MM-DD; when set, ingests titles premiered
+            on/after this date via the discover endpoint.
+        until_date: optional YYYY-MM-DD; with ``since_date``, bounds the
+            discover window (used for per-year deep sweeps).
 
     Returns:
         Summary dict with per-list counts and totals.
@@ -446,7 +457,13 @@ def run_catalog_update(
     from database.mongo_client import MongoDBManager
 
     is_movie = content_type == "movie"
-    selected_lists = lists or (list(MOVIE_DEFAULT_LISTS) if is_movie else list(DEFAULT_LISTS))
+    discover_mode = bool(since_date)
+    if discover_mode:
+        selected_lists = ["discover"]
+    elif lists:
+        selected_lists = lists
+    else:
+        selected_lists = list(MOVIE_DEFAULT_LISTS if is_movie else DEFAULT_LISTS)
     close_manager = manager is None
     manager = manager or MongoDBManager()
     own_client = client_factory is None
@@ -458,14 +475,20 @@ def run_catalog_update(
     try:
         for list_name in selected_lists:
             per_list = {"inserted": 0, "updated": 0, "skipped": 0}
-            suffix = "movie" if is_movie else "tv"
-            fetch_fn = getattr(client, f"fetch_{list_name}_{suffix}", None)
+            if discover_mode:
+                fetch_fn = client.fetch_discover_movie if is_movie else client.fetch_discover_tv
+            else:
+                suffix = "movie" if is_movie else "tv"
+                fetch_fn = getattr(client, f"fetch_{list_name}_{suffix}", None)
             if fetch_fn is None:
                 logger.warning("Unknown TMDb list '%s' for content_type '%s'; skipping.", list_name, content_type)
                 continue
             for page in range(1, max(pages_per_list, 1) + 1):
                 try:
-                    rows = fetch_fn(page=page)
+                    if discover_mode:
+                        rows = fetch_fn(page=page, from_date=since_date, to_date=until_date)
+                    else:
+                        rows = fetch_fn(page=page)
                 except (TMDbAPIError, Exception) as exc:
                     logger.warning("Failed to fetch %s page %s: %s", list_name, page, exc)
                     break
@@ -501,7 +524,13 @@ if __name__ == "__main__":
     parser.add_argument("--lists", nargs="+", default=None, help="TMDb list endpoints to pull.")
     parser.add_argument("--sleep", type=float, default=DEFAULT_PAGE_SLEEP_SECONDS, help="Seconds between page requests.")
     parser.add_argument("--no-enrich", action="store_true", help="Disable detail enrichment.")
+    parser.add_argument("--since", type=int, default=None,
+                        help="Ingest all titles premiered/released in this year or later (e.g. 2000, via TMDb discover).")
     args = parser.parse_args()
+
+    resume = None
+    if args.since:
+        resume = f"{args.since:04d}-01-01"
 
     result = run_catalog_update(
         pages_per_list=args.pages,
@@ -509,5 +538,6 @@ if __name__ == "__main__":
         sleep_seconds=args.sleep,
         enrich=not args.no_enrich,
         content_type=args.type,
+        since_date=resume,
     )
     print(result)

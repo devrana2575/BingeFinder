@@ -6,18 +6,13 @@ import { useRegion } from '../context/RegionContext';
 import { t } from '../i18n';
 import RegionSelector from '../components/RegionSelector';
 import SeriesGrid from '../components/SeriesGrid';
+import SearchSuggest from '../components/SearchSuggest';
 import { SkeletonGrid } from '../components/Skeletons';
 import ErrorState from '../components/ErrorState';
 import EmptyState from '../components/EmptyState';
 
 function HeroSection() {
-  const [query, setQuery] = useState('');
   const navigate = useNavigate();
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (query.trim()) navigate(`/discover?q=${encodeURIComponent(query.trim())}`);
-  };
 
   return (
     <section className="rounded-2xl border border-border bg-surface p-8 sm:p-12 mb-8">
@@ -27,18 +22,15 @@ function HeroSection() {
       <p className="text-text-muted text-sm mb-6 max-w-lg">
         {t('hero.subtitleNoCount')}
       </p>
-      <form onSubmit={handleSubmit} className="flex gap-3 max-w-lg">
+      <div className="max-w-lg">
         <label htmlFor="hero-search" className="sr-only">{t('hero.searchLabel')}</label>
-        <input
-          id="hero-search"
-          type="text"
-          value={query}
-          onChange={e => setQuery(e.target.value)}
+        <SearchSuggest
+          onSearch={q => navigate(`/discover?q=${encodeURIComponent(q.trim())}`)}
+          actionLabel={t('hero.searchButton')}
           placeholder={t('hero.searchPlaceholder')}
-          className="flex-1 px-4 py-2.5 rounded-lg bg-bg border border-border text-text text-sm placeholder:text-text-muted focus:border-accent"
+          inputClassName="flex-1 px-4 py-2.5 rounded-lg bg-bg border border-border text-text text-sm placeholder:text-text-muted focus:border-accent"
         />
-        <button type="submit" className="btn-primary">{t('hero.searchButton')}</button>
-      </form>
+      </div>
       <Link to="/surprise" className="inline-block mt-4 text-sm text-text-secondary hover:text-accent transition-colors">
         {t('hero.surpriseLink')}
       </Link>
@@ -103,35 +95,40 @@ export default function HomePage() {
   const [freeTonight, setFreeTonight] = useState(null);
   const [newNoteworthy, setNewNoteworthy] = useState(null);
   const [error, setError] = useState(null);
-  const [loading, setLoading] = useState(true);
 
   const load = useCallback(() => {
-    setLoading(true);
     setError(null);
-    const tasks = [
-      api.trending().catch(e => { console.error(e); return []; }),
-      api.hiddenGems().catch(e => { console.error(e); return []; }),
-      api.freeTonight(region).catch(e => { console.error(e); return []; }),
-      api.newNoteworthy().catch(e => { console.error(e); return []; }),
-    ];
+    setTrending(null);
+    setGems(null);
+    setRecs(null);
+    setFreeTonight(null);
+    setNewNoteworthy(null);
+
+    api.trending()
+      .then(d => setTrending(d))
+      .catch(e => { console.error(e); setTrending([]); });
+    api.hiddenGems()
+      .then(d => setGems(d))
+      .catch(e => { console.error(e); setGems([]); });
+    api.freeTonight(region)
+      .then(d => setFreeTonight(d))
+      .catch(e => { console.error(e); setFreeTonight([]); });
+    api.newNoteworthy()
+      .then(d => setNewNoteworthy(d))
+      .catch(e => { console.error(e); setNewNoteworthy([]); });
     if (isAuth) {
-      tasks.push(api.personalizedRecs(region).catch(() => null));
+      api.personalizedRecs(region)
+        .then(d => setRecs(d))
+        .catch(e => { console.error(e); setRecs([]); });
     }
-    Promise.all(tasks)
-      .then(results => {
-        setTrending(results[0]);
-        setGems(results[1]);
-        setFreeTonight(results[2]);
-        setNewNoteworthy(results[3]);
-        if (isAuth) setRecs(results[4]);
-      })
-      .catch(e => setError(e.message))
-      .finally(() => setLoading(false));
   }, [isAuth, region]);
 
   useEffect(load, [load]);
 
-  if (loading) {
+  const nothingLoaded = trending === null && gems === null && freeTonight === null &&
+    newNoteworthy === null && (recs === null || !isAuth);
+
+  if (nothingLoaded) {
     return (
       <>
         <div className="rounded-2xl border border-border bg-surface p-8 sm:p-12 mb-8">

@@ -7,9 +7,15 @@ fresh-pick / hidden-gem / free-to-watch helpers over a series catalog.
 
 import datetime
 import random
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import Any, Dict, List, Optional
 
 from backend.services.vibes import pick_surprise, filter_by_vibe, VIBES, SURPRISE_KEY
+
+# Concurrent provider lookups for the Free Tonight rail. Bounded so the
+# batch of sampled series resolves in a couple of round-trips instead of
+# N sequential 1-2s TMDb calls.
+FREE_TONIGHT_MAX_WORKERS = 8
 
 
 def get_tonights_binge(docs: List[Dict], seen_ids: Optional[set] = None, limit: int = 6) -> List[Dict]:
@@ -205,41 +211,54 @@ def get_free_to_watch(docs: List[Dict], limit: int = 6, region: Optional[str] = 
     sampled = random.sample(rated, sample_size) if sample_size > 0 else []
 
     free_series = []
+
+    def _lookup(doc: Dict) -> Optional[Dict]:
+        return _cached_watch_providers(
+            doc.get("series_id"),
+            doc.get("imdb_id"),
+            doc.get("name", ""),
+            doc.get("premiered"),
+            region=effective_region,
+        )
+
+    def _cancel_remaining(futures) -> None:
+        for fut in futures:
+            fut.cancel()
+
     consecutive_failures = 0
-    for doc in sampled:
-        if len(free_series) >= limit:
-            break
-        try:
-            providers_data = _cached_watch_providers(
-                doc.get("series_id"),
-                doc.get("imdb_id"),
-                doc.get("name", ""),
-                doc.get("premiered"),
-                region=effective_region,
-            )
-        except Exception:
-            consecutive_failures += 1
-            if consecutive_failures >= 2:
+    with ThreadPoolExecutor(max_workers=FREE_TONIGHT_MAX_WORKERS) as pool:
+        futures = {pool.submit(_lookup, doc): doc for doc in sampled}
+        for fut in as_completed(futures):
+            if len(free_series) >= limit:
+                _cancel_remaining(futures)
                 break
-            continue
-        if not providers_data or not providers_data.get("providers"):
-            consecutive_failures += 1
-            if consecutive_failures >= 2:
-                break
-            continue
-        consecutive_failures = 0
-        providers = providers_data["providers"]
-        free = providers.get("free") or []
-        ads = providers.get("ads") or []
-        if free or ads:
-            entry = dict(doc)
-            # Store clean product-level fields: a nominal tier (highest
-            # priority free type present) plus the platform names.
-            entry["_free_tier"] = "free" if free else "free_with_ads"
-            entry["_free_providers"] = (free + ads)[:3]
-            entry["_free_provider_names"] = [
-                (p.get("provider_name") or "Unknown") for p in (free + ads)[:3]
-            ]
-            free_series.append(entry)
+            doc = futures[fut]
+            try:
+                providers_data = fut.result()
+            except Exception:
+                providers_data = None
+            if not providers_data or not providers_data.get("providers"):
+                consecutive_failures += 1
+                if consecutive_failures >= 2:
+                    _cancel_remaining(futures)
+                    break
+                continue
+            consecutive_failures = 0
+            providers = providers_data["providers"]
+            free = providers.get("free") or []
+            ads = providers.get("ads") or []
+            if free or ads:
+                entry = dict(doc)
+                # Store clean product-level fields: a nominal tier (highest
+                # priority free type present) plus the platform names.
+                entry["_free_tier"] = "free" if free else "free_with_ads"
+                entry["_free_providers"] = (free + ads)[:3]
+                entry["_free_provider_names"] = [
+                    (p.get("provider_name") or "Unknown") for p in (free + ads)[:3]
+                ]
+                free_series.append(entry)
+                if len(free_series) >= limit:
+                    _cancel_remaining(futures)
+                    break
 
     return free_series

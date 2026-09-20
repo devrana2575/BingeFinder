@@ -51,5 +51,14 @@ class SeriesSearchResult(BaseModel):
     results: List[SeriesSummary]
 
 
+class SeriesSuggestion(BaseModel):
+    series_id: int
+    name: str
+    content_type: str = "tv_series"
+    rating: Optional[float] = None
+    year: Optional[str] = None
+    image: Optional[str] = None
+
+
 class CatalogCount(BaseModel):
     total: int

@@ -8,7 +8,8 @@ from typing import List, Optional
 
 from fastapi import APIRouter, Query
 
-from backend.schemas.series import SeriesSummary, SeriesDetail, SeriesSearchResult, CatalogCount
+from backend.schemas.series import (CatalogCount, SeriesDetail, SeriesSearchResult,
+                                    SeriesSuggestion, SeriesSummary)
 from backend.services import series_service
 from api.tmdb import build_poster_url
 
@@ -82,6 +83,8 @@ def search(
     status: Optional[str] = Query(None, description="Filter by status"),
     min_rating: float = Query(0.0, description="Minimum rating"),
     content_type: Optional[str] = Query(None, description="Filter by content type (tv_series|movie|anime)"),
+    limit: int = Query(50, ge=1, le=200, description="Max results to return in this page"),
+    offset: int = Query(0, ge=0, description="Skip this many results (for pagination)"),
 ):
     docs, err = series_service.get_all_series()
     if err:
@@ -92,8 +95,42 @@ def search(
         docs, query=q, genres=genres, min_rating=min_rating,
         language=language, year=year, status=status, content_type=content_type,
     )
-    results = [_doc_to_summary(d) for d in filtered[:50]]
+    results = [_doc_to_summary(d) for d in filtered[offset:offset + limit]]
     return SeriesSearchResult(query=q, total_results=len(filtered), results=results)
+
+
+@router.get("/suggest", response_model=List[SeriesSuggestion])
+def suggest(
+    q: str = Query("", description="Search query for suggestions"),
+    content_type: Optional[str] = Query(None, description="Filter by content type (tv_series|movie|anime)"),
+    limit: int = Query(8, ge=1, le=20, description="Max suggestions to return"),
+):
+    """Lightweight typeahead suggestions for the search boxes."""
+    if not q or len(q.strip()) < 1:
+        return []
+    docs, err = series_service.get_all_series()
+    if err:
+        return []
+
+    seen: set = set()
+    suggestions: List[SeriesSuggestion] = []
+    for d in series_service.search_series(docs, query=q, content_type=content_type):
+        sid = d["series_id"]
+        if sid in seen:
+            continue
+        seen.add(sid)
+        premiered = d.get("premiered") or ""
+        suggestions.append(SeriesSuggestion(
+            series_id=sid,
+            name=d.get("name") or "Untitled",
+            content_type=d.get("content_type") or "tv_series",
+            rating=d.get("rating"),
+            year=premiered[:4] if len(premiered) >= 4 and premiered[:4].isdigit() else None,
+            image=build_poster_url(d.get("image_medium") or d.get("image_original")),
+        ))
+        if len(suggestions) >= limit:
+            break
+    return suggestions
 
 
 @router.get("/{series_id}", response_model=SeriesDetail)

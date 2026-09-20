@@ -199,6 +199,48 @@ class TMDbClient:
         """
         return self._fetch_results("/tv/popular", page=page)
 
+    def fetch_discover_tv(
+        self, page: int = 1, from_date: str = "2000-01-01", to_date: str = ""
+    ) -> List[Dict[str, Any]]:
+        """
+        Fetch TV/web series via TMDb's discover endpoint, filtered to titles
+        first airing at/after `from_date` (used for the after-2000 catalog
+        sweep), ranked by popularity.
+
+        Args:
+            page: Page number to fetch.
+            from_date: Earliest first-air date (YYYY-MM-DD).
+            to_date: Optional latest first-air date (YYYY-MM-DD).
+
+        Returns:
+            List of raw TMDb TV series dictionaries.
+        """
+        params: Dict[str, Any] = {"sort_by": "popularity.desc", "first_air_date.gte": from_date}
+        if to_date:
+            params["first_air_date.lte"] = to_date
+        return self._fetch_results("/discover/tv", page=page, extra_params=params)
+
+    def fetch_discover_movie(
+        self, page: int = 1, from_date: str = "2000-01-01", to_date: str = ""
+    ) -> List[Dict[str, Any]]:
+        """
+        Fetch movies via TMDb's discover endpoint, filtered to titles released
+        at/after `from_date` (used for the after-2000 catalog sweep), ranked
+        by popularity.
+
+        Args:
+            page: Page number to fetch.
+            from_date: Earliest release date (YYYY-MM-DD).
+            to_date: Optional latest release date (YYYY-MM-DD).
+
+        Returns:
+            List of raw TMDb movie dictionaries.
+        """
+        params: Dict[str, Any] = {"sort_by": "popularity.desc", "primary_release_date.gte": from_date}
+        if to_date:
+            params["primary_release_date.lte"] = to_date
+        return self._fetch_results("/discover/movie", page=page, extra_params=params)
+
     def fetch_top_rated_tv(self, page: int = 1) -> List[Dict[str, Any]]:
         """
         Fetch top-rated TV/web series of all time (per TMDb ranking).

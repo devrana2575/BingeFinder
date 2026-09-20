@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
+import SearchSuggest from '../components/SearchSuggest';
 import SeriesGrid from '../components/SeriesGrid';
 import { SkeletonGrid } from '../components/Skeletons';
 import ErrorState from '../components/ErrorState';
@@ -23,6 +24,8 @@ export default function DiscoverPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+
+  const PAGE_SIZE = 40;
 
   const q = searchParams.get('q') || '';
   const genre = searchParams.get('genre') || '';
@@ -49,10 +52,10 @@ export default function DiscoverPage() {
     setLocalQuery(q);
   }, [q]);
 
-  const load = useCallback(() => {
+  const load = useCallback((startAt = 0) => {
     setLoading(true);
     setError(null);
-    const params = {};
+    const params = { limit: PAGE_SIZE, offset: startAt };
     if (q) params.q = q;
     if (genre) params.genre = genre;
     if (year) params.year = year;
@@ -61,14 +64,24 @@ export default function DiscoverPage() {
     if (type) params.content_type = type;
     api.search(params)
       .then(d => {
-        setSeries(d.results || []);
+        const results = d.results || [];
+        setSeries(prev => (startAt === 0 ? results : [...prev, ...results]));
         setTotal(d.total_results || 0);
       })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
   }, [q, genre, year, min_rating, status, type]);
 
-  useEffect(load, [load]);
+  useEffect(() => {
+    setSeries([]);
+    load(0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [load]);
+
+  const loadMore = () => {
+    if (loading) return;
+    load(series.length);
+  };
 
   useEffect(() => {
     api.filterOptions().then(d => setFilterOptions(d)).catch(() => {});
@@ -94,15 +107,14 @@ export default function DiscoverPage() {
         </p>
       </div>
 
-      <div className="mb-6">
+      <div className="mb-6 max-w-md">
         <label htmlFor="discover-search" className="sr-only">{t('discover.searchLabel')}</label>
-        <input
-          id="discover-search"
-          type="text"
-          value={localQuery}
-          onChange={e => setLocalQuery(e.target.value)}
+        <SearchSuggest
+          initialState={localQuery}
+          onChange={v => setLocalQuery(v)}
+          contentType={type || undefined}
           placeholder={t('discover.searchPlaceholder')}
-          className="w-full max-w-md px-4 py-2.5 rounded-lg bg-surface border border-border text-text text-sm placeholder:text-text-muted focus:border-accent"
+          inputClassName="w-full px-4 py-2.5 rounded-lg bg-surface border border-border text-text text-sm placeholder:text-text-muted focus:border-accent"
         />
       </div>
 
@@ -161,7 +173,7 @@ export default function DiscoverPage() {
       )}
 
       {loading ? (
-        <SkeletonGrid />
+        series.length === 0 && <SkeletonGrid />
       ) : error ? (
         <ErrorState message={error} onRetry={load} />
       ) : series.length === 0 ? (
@@ -170,7 +182,21 @@ export default function DiscoverPage() {
           message={q ? t('discover.noResultsForQuery', { q }) : t('discover.noResultsFilters')}
         />
       ) : (
-        <SeriesGrid series={series} />
+        <>
+          <SeriesGrid series={series} />
+          {series.length < total && (
+            <div className="flex justify-center mt-8">
+              <button
+                type="button"
+                onClick={loadMore}
+                disabled={loading}
+                className="px-5 py-2.5 rounded-lg bg-surface border border-border text-sm text-text-secondary hover:border-accent hover:text-accent transition-colors disabled:opacity-50"
+              >
+                {loading ? 'Loading...' : t('discover.showMore')}
+              </button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );

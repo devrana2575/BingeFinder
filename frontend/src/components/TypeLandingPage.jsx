@@ -4,6 +4,7 @@ import { api } from '../api/client';
 import { useRegion } from '../context/RegionContext';
 import { t } from '../i18n';
 import SeriesGrid from './SeriesGrid';
+import SearchSuggest from './SearchSuggest';
 import { SkeletonGrid } from './Skeletons';
 import ErrorState from './ErrorState';
 import EmptyState from './EmptyState';
@@ -40,45 +41,38 @@ export default function TypeLandingPage({ type }) {
   const [gems, setGems] = useState(null);
   const [freeTonight, setFreeTonight] = useState(null);
   const [newNoteworthy, setNewNoteworthy] = useState(null);
-  const [count, setCount] = useState(null);
-  const [query, setQuery] = useState('');
   const [error, setError] = useState(null);
-  const [loading, setLoading] = useState(true);
 
   const labelKey = TYPE_LABELS[type] || 'types.series';
   const subKey = TYPE_SUBTITLES[type] || 'types.seriesSub';
 
   const load = useCallback(() => {
-    setLoading(true);
     setError(null);
-    const tasks = [
-      api.search({ content_type: type }).then(d => setCount(d.total_results || 0)).catch(() => null),
-      api.trending(type).catch(e => { console.error(e); return []; }),
-      api.hiddenGems(type).catch(e => { console.error(e); return []; }),
-      api.freeTonight(region, type).catch(e => { console.error(e); return []; }),
-      api.newNoteworthy(type).catch(e => { console.error(e); return []; }),
-    ];
-    Promise.all(tasks)
-      .then(results => {
-        setTrending(results[1]);
-        setGems(results[2]);
-        setFreeTonight(results[3]);
-        setNewNoteworthy(results[4]);
-      })
-      .catch(e => setError(e.message))
-      .finally(() => setLoading(false));
+    setTrending(null);
+    setGems(null);
+    setFreeTonight(null);
+    setNewNoteworthy(null);
+
+    api.trending(type)
+      .then(d => setTrending(d))
+      .catch(e => { console.error(e); setTrending([]); });
+    api.hiddenGems(type)
+      .then(d => setGems(d))
+      .catch(e => { console.error(e); setGems([]); });
+    api.freeTonight(region, type)
+      .then(d => setFreeTonight(d))
+      .catch(e => { console.error(e); setFreeTonight([]); });
+    api.newNoteworthy(type)
+      .then(d => setNewNoteworthy(d))
+      .catch(e => { console.error(e); setNewNoteworthy([]); });
   }, [type, region]);
 
   useEffect(load, [load]);
 
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (query.trim()) {
-      navigate(`/discover?type=${type}&q=${encodeURIComponent(query.trim())}`);
-    }
-  };
+  const nothingLoaded = trending === null && gems === null && freeTonight === null &&
+    newNoteworthy === null;
 
-  if (loading) {
+  if (nothingLoaded) {
     return (
       <>
         <div className="rounded-2xl border border-border bg-surface p-8 mb-8">
@@ -102,22 +96,18 @@ export default function TypeLandingPage({ type }) {
           {t(labelKey)}
         </h1>
         <p className="text-text-muted text-sm mb-5 max-w-lg">
-          {count != null && count > 0
-            ? t('types.count', { count: count.toLocaleString(), label: t(labelKey).toLowerCase() })
-            : t(subKey)}
+          {t(subKey)}
         </p>
-        <form onSubmit={handleSubmit} className="flex gap-3 max-w-lg">
+        <div className="max-w-lg">
           <label htmlFor={`${type}-search`} className="sr-only">{t('types.searchLabel')}</label>
-          <input
-            id={`${type}-search`}
-            type="text"
-            value={query}
-            onChange={e => setQuery(e.target.value)}
+          <SearchSuggest
+            contentType={type}
+            onSearch={q => navigate(`/discover?type=${type}&q=${encodeURIComponent(q.trim())}`)}
+            actionLabel={t('types.searchButton')}
             placeholder={t('types.searchPlaceholder', { label: t(labelKey) })}
-            className="flex-1 px-4 py-2.5 rounded-lg bg-bg border border-border text-text text-sm placeholder:text-text-muted focus:border-accent"
+            inputClassName="flex-1 px-4 py-2.5 rounded-lg bg-bg border border-border text-text text-sm placeholder:text-text-muted focus:border-accent"
           />
-          <button type="submit" className="btn-primary">{t('types.searchButton')}</button>
-        </form>
+        </div>
         <Link to={`/discover?type=${type}`} className="inline-block mt-4 text-sm text-text-secondary hover:text-accent transition-colors">
           {t('types.browseAll', { label: t(labelKey) })}
         </Link>

@@ -94,6 +94,13 @@ export const api = {
   surprise: () => request('/discover/surprise'),
   vibes: () => request('/discover/vibes'),
   vibeFiltered: (key) => request(`/discover/vibes/${key}`),
+  featured: (contentType, limit = 6) => {
+    const params = new URLSearchParams();
+    if (contentType) params.set('content_type', contentType);
+    if (limit) params.set('limit', limit);
+    const qs = params.toString();
+    return request(`/discover/featured${qs ? `?${qs}` : ''}`);
+  },
 
   seriesRecs: (id) => request(`/series/${id}/recommendations`),
   personalizedRecs: (region, contentType) => {

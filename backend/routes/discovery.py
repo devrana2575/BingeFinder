@@ -7,18 +7,31 @@ GET /discover, /tonights-binge, /trending, /hidden-gems, /free-tonight,
 
 from typing import Any, Dict, List, Optional, Set
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from backend.dependencies import get_current_user
-from backend.schemas.discovery import SurprisePick
-from backend.schemas.series import SeriesSummary
+from backend.schemas.discovery import FeaturedItem, SurprisePick
+from backend.schemas.series import FreeProvider, SeriesSummary
 from backend.services import series_service, discovery_service, user_service
-from api.tmdb import build_poster_url
+from api.tmdb import build_backdrop_url, build_image_url, build_poster_url
 
 router = APIRouter()
 
 # Per-session seen IDs (in-memory, resets on server restart — acceptable)
 _seen_ids: Set[int] = set()
+
+
+def _doc_to_free_providers(raw: Any) -> List[FreeProvider]:
+    providers: List[FreeProvider] = []
+    for p in raw or []:
+        if not isinstance(p, dict):
+            continue
+        providers.append(FreeProvider(
+            provider_id=p.get("provider_id"),
+            provider_name=p.get("provider_name") or p.get("name") or "Unknown",
+            logo_url=build_image_url(p.get("logo_path"), "w92"),
+        ))
+    return providers
 
 
 def _doc_to_summary(doc: dict) -> SeriesSummary:
@@ -34,6 +47,24 @@ def _doc_to_summary(doc: dict) -> SeriesSummary:
         status=doc.get("status"),
         free_tier=doc.get("_free_tier"),
         free_provider_names=doc.get("_free_provider_names") or [],
+        free_providers=_doc_to_free_providers(doc.get("_free_providers")),
+    )
+
+
+def _doc_to_featured(doc: dict) -> FeaturedItem:
+    premiered = doc.get("premiered") or ""
+    return FeaturedItem(
+        series_id=doc["series_id"],
+        name=doc.get("name") or "Untitled",
+        content_type=doc.get("content_type") or "tv_series",
+        rating=doc.get("rating"),
+        genres=doc.get("genres") or [],
+        year=premiered[:4] if len(premiered) >= 4 and premiered[:4].isdigit() else None,
+        summary=doc.get("summary"),
+        image=build_backdrop_url(doc.get("image_original") or doc.get("image_medium"), "w1280"),
+        language=doc.get("language"),
+        premiered=premiered or None,
+        status=doc.get("status"),
     )
 
 
@@ -143,6 +174,60 @@ def hidden_gems(content_type: Optional[str] = None):
     docs = _rail(content_type)
     gems = discovery_service.get_hidden_gems(docs)
     return [_doc_to_summary(d) for d in gems]
+
+
+@router.get("/featured", response_model=List[FeaturedItem])
+def featured(
+    content_type: Optional[str] = None,
+    limit: int = Query(3, ge=1, le=12),
+):
+    """
+    Hero pool (Netflix-style): the BEST-RATED catalog titles that have real
+    backdrop artwork and enough popularity to be credible (weight floor keeps
+    near-zero-vote 10.0 noise out). The first item is the single highest-rated
+    pick for the hero banner; a per-type cap keeps the rest a varied mix of
+    movies, series and anime.
+    """
+    docs, err = series_service.get_all_series()
+    if err:
+        raise HTTPException(status_code=503, detail=err)
+
+    if content_type:
+        docs = [d for d in docs if (d.get("content_type") or "tv_series") == content_type]
+    docs = [
+        d for d in docs
+        if (d.get("image_original") or d.get("image_medium"))
+        and isinstance(d.get("rating"), (int, float))
+        and isinstance(d.get("weight"), (int, float))
+        and d["rating"] >= 7.0
+        and d["weight"] >= 150
+    ]
+    docs.sort(key=lambda d: (float(d["rating"]), d.get("weight") or 0), reverse=True)
+
+    # De-dupe repeated catalog entries for the same title (e.g. duplicate
+    # Breaking Bad rows from different ingest sources belong at most once).
+    seen_names: Set[str] = set()
+    unique = []
+    for d in docs:
+        key = str(d.get("name") or "").strip().lower()
+        if not key or key in seen_names:
+            continue
+        seen_names.add(key)
+        unique.append(d)
+    docs = unique
+
+    selected: List[dict] = []
+    type_count: Dict[str, int] = {}
+    for d in docs:
+        ct = d.get("content_type") or "tv_series"
+        if type_count.get(ct, 0) >= 2:
+            continue
+        type_count[ct] = type_count.get(ct, 0) + 1
+        selected.append(d)
+        if len(selected) >= limit:
+            break
+
+    return [_doc_to_featured(d) for d in selected]
 
 
 @router.get("/free-tonight", response_model=List[SeriesSummary])

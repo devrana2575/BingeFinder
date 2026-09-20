@@ -9,6 +9,12 @@ from typing import Any, Dict, List, Optional
 from pydantic import BaseModel
 
 
+class FreeProvider(BaseModel):
+    provider_id: Optional[int] = None
+    provider_name: Optional[str] = None
+    logo_url: Optional[str] = None
+
+
 class SeriesSummary(BaseModel):
     series_id: int
     name: str
@@ -22,6 +28,8 @@ class SeriesSummary(BaseModel):
     # Free-availability hint for the "Free Tonight" rail (product-level only).
     free_tier: Optional[str] = None
     free_provider_names: List[str] = []
+    # Free/ads platforms (with logos), up to a few, for the Free Tonight rail.
+    free_providers: List[FreeProvider] = []
     # User reaction for this series when returned from /user/reactions only.
     reaction: Optional[str] = None
 

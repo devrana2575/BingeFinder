@@ -69,8 +69,12 @@ def filter_by_vibe(docs: List[Dict[str, Any]], vibe_key: str, limit: int = 12) -
         return []
 
     wanted = vibe["genres"]
-    matches = [d for d in docs if wanted.intersection(d.get("genres") or [])]
-    pool = matches if matches else docs
+    rated = [
+        d for d in docs
+        if isinstance(d.get("rating"), (int, float)) and d["rating"] > 0
+    ]
+    matches = [d for d in rated if wanted.intersection(d.get("genres") or [])]
+    pool = matches if matches else rated
 
     def sort_key(d: Dict[str, Any]):
         rating = d.get("rating") if isinstance(d.get("rating"), (int, float)) else -1
@@ -183,7 +187,12 @@ def pick_surprise(
         if vibe_matches:
             pool = vibe_matches
 
-    candidates = [d for d in pool if d.get("series_id") is not None]
+    candidates = [
+        d for d in pool
+        if d.get("series_id") is not None
+        and isinstance(d.get("rating"), (int, float))
+        and d["rating"] > 0
+    ]
     if not candidates:
         return None
 

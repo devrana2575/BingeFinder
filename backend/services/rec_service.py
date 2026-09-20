@@ -36,6 +36,28 @@ _ALL_GENRES = [
 ]
 _TOP_LANGUAGES = ["English", "Japanese", "Spanish", "Korean", "Hindi", "French", "German"]
 
+_ALLOWED_TYPES = {"movie", "tv_series", "anime"}
+
+
+def _effective_content_types(preferences: Dict[str, Any], content_type: Optional[str]) -> Optional[List[str]]:
+    """
+    Resolve which content types recommendations should be drawn from.
+
+    An explicit ``content_type`` param wins. Otherwise, if the user has saved
+    ``liked_types`` preferences (Movies / Web Series / Anime chips in Settings),
+    those restrict the pool. No preference means "all types".
+    """
+    if content_type:
+        return [content_type]
+    liked = {
+        str(x).strip().lower()
+        for x in (preferences.get("liked_types") or [])
+        if x and str(x).strip().lower() in _ALLOWED_TYPES
+    }
+    if not liked:
+        return None
+    return sorted(liked)
+
 
 def get_recommendations_for_series(
     series_id: int, top_n: int = 8
@@ -183,9 +205,11 @@ def get_personalized_recommendations(
     excluded_set = interacted_set | disliked_set
     all_rows = np.arange(len(series_ids))
     mask = np.array([sid not in excluded_set for sid in series_ids])
-    if content_type:
+    effective_types = _effective_content_types(preferences, content_type)
+    if effective_types:
+        allowed = set(effective_types)
         ct_mask = np.array([
-            (metadata.get(sid, {}).get("content_type") or "tv_series") == content_type
+            (metadata.get(sid, {}).get("content_type") or "tv_series") in allowed
             for sid in series_ids
         ])
         mask = mask & ct_mask
@@ -405,8 +429,13 @@ def _cold_start_recommendations(
     if err:
         return [], err
 
-    if content_type:
-        docs = [d for d in docs if (d.get("content_type") or "tv_series") == content_type]
+    effective_types = _effective_content_types(preferences, content_type)
+    if effective_types:
+        allowed = set(effective_types)
+        docs = [
+            d for d in docs
+            if (d.get("content_type") or "tv_series") in allowed
+        ]
 
     qualified = [
         d for d in docs

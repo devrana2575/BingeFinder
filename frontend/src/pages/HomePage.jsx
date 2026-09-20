@@ -1,10 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useRegion } from '../context/RegionContext';
 import { t } from '../i18n';
-import RegionSelector from '../components/RegionSelector';
 import SeriesGrid from '../components/SeriesGrid';
 import SearchSuggest from '../components/SearchSuggest';
 import { SkeletonGrid } from '../components/Skeletons';
@@ -15,11 +14,11 @@ function HeroSection() {
   const navigate = useNavigate();
 
   return (
-    <section className="rounded-2xl border border-border bg-surface p-8 sm:p-12 mb-8">
-      <h1 className="text-2xl sm:text-3xl font-bold text-text mb-2" style={{ fontFamily: 'Sora, sans-serif' }}>
+    <section className="mb-8">
+      <h1 className="text-lg sm:text-xl font-bold text-text mb-1" style={{ fontFamily: 'Sora, sans-serif' }}>
         {t('hero.title')}
       </h1>
-      <p className="text-text-muted text-sm mb-6 max-w-lg">
+      <p className="text-text-muted text-sm mb-3 max-w-lg">
         {t('hero.subtitleNoCount')}
       </p>
       <div className="max-w-lg">
@@ -31,7 +30,7 @@ function HeroSection() {
           inputClassName="flex-1 px-4 py-2.5 rounded-lg bg-bg border border-border text-text text-sm placeholder:text-text-muted focus:border-accent"
         />
       </div>
-      <Link to="/surprise" className="inline-block mt-4 text-sm text-text-secondary hover:text-accent transition-colors">
+      <Link to="/surprise" className="inline-block mt-3 text-sm text-text-secondary hover:text-accent transition-colors">
         {t('hero.surpriseLink')}
       </Link>
     </section>
@@ -93,7 +92,11 @@ export default function HomePage() {
   const [gems, setGems] = useState(null);
   const [recs, setRecs] = useState(null);
   const [freeTonight, setFreeTonight] = useState(null);
+  const [topRated, setTopRated] = useState(null);
   const [newNoteworthy, setNewNoteworthy] = useState(null);
+  const [continueWatching, setContinueWatching] = useState(null);
+  const [becauseWatched, setBecauseWatched] = useState(null);
+  const [freePlatform, setFreePlatform] = useState(null);
   const [error, setError] = useState(null);
 
   const load = useCallback(() => {
@@ -102,11 +105,18 @@ export default function HomePage() {
     setGems(null);
     setRecs(null);
     setFreeTonight(null);
+    setTopRated(null);
     setNewNoteworthy(null);
+    setContinueWatching(null);
+    setBecauseWatched(null);
+    setFreePlatform(null);
 
     api.trending()
       .then(d => setTrending(d))
       .catch(e => { console.error(e); setTrending([]); });
+    api.featured(undefined, 8)
+      .then(d => setTopRated(d))
+      .catch(e => { console.error(e); setTopRated([]); });
     api.hiddenGems()
       .then(d => setGems(d))
       .catch(e => { console.error(e); setGems([]); });
@@ -120,10 +130,46 @@ export default function HomePage() {
       api.personalizedRecs(region)
         .then(d => setRecs(d))
         .catch(e => { console.error(e); setRecs([]); });
+      api.recentlyViewed()
+        .then(d => {
+          setContinueWatching(d);
+          const last = d?.[0];
+          if (last) {
+            api.seriesRecs(last.series_id)
+              .then(res => {
+                const list = Array.isArray(res) ? res : res?.recommendations || [];
+                setBecauseWatched(list);
+              })
+              .catch(() => setBecauseWatched([]));
+          } else {
+            setBecauseWatched([]);
+          }
+        })
+        .catch(e => { console.error(e); setContinueWatching([]); setBecauseWatched([]); });
     }
   }, [isAuth, region]);
 
   useEffect(load, [load]);
+
+  const guestPicks = useMemo(() => {
+    if (isAuth || !trending?.length) return null;
+    let prefs = {};
+    try { prefs = JSON.parse(localStorage.getItem('bf_guest_prefs') || '{}'); } catch {}
+    const likedTypes = new Set(prefs.liked_types || []);
+    const genres = new Set((prefs.genres || []).map(g => String(g).toLowerCase()));
+    const languages = new Set((prefs.languages || []).map(l => String(l).toLowerCase()));
+
+    const pool = trending.filter(s => {
+      if (likedTypes.size > 0 && !likedTypes.has(s.content_type)) return false;
+      if (genres.size > 0 && !(s.genres || []).some(g => genres.has(String(g).toLowerCase()))) return false;
+      return true;
+    });
+    if (pool.length === 0) return null;
+    const langScore = s => languages.size > 0 && s.language && languages.has(String(s.language).toLowerCase()) ? 1 : 0;
+    return [...pool].sort((a, b) =>
+      (langScore(b) - langScore(a)) || ((b.rating || 0) - (a.rating || 0))
+    ).slice(0, 10);
+  }, [isAuth, trending]);
 
   const nothingLoaded = trending === null && gems === null && freeTonight === null &&
     newNoteworthy === null && (recs === null || !isAuth);
@@ -144,23 +190,59 @@ export default function HomePage() {
   if (error) return <ErrorState message={error} onRetry={load} />;
 
   const hasTrending = trending?.length > 0;
+  const hasTopRated = topRated?.length > 0;
   const hasGems = gems?.length > 0;
   const hasRecs = recs?.length > 0;
   const hasFreeTonight = freeTonight?.length > 0;
   const hasNewNoteworthy = newNoteworthy?.length > 0;
+  const hasContinueWatching = isAuth && continueWatching?.length > 0;
+  const watchedName = continueWatching?.[0]?.name;
+  const hasBecauseWatched = isAuth && watchedName && becauseWatched?.length > 0;
+
+  const freePlatforms = [
+    ...new Map(
+      (freeTonight || [])
+        .flatMap(s => s.free_providers || [])
+        .filter(p => p.provider_id && p.provider_name)
+        .map(p => [p.provider_id, p])
+    ).values(),
+  ];
+  const filteredFreeTonight = freePlatform
+    ? (freeTonight || []).filter(s => (s.free_providers || []).some(p => p.provider_id === freePlatform))
+    : (freeTonight || []);
 
   return (
     <div>
-      {isAuth && (
-        <div className="flex justify-end mb-4">
-          <div className="rounded-lg border border-border bg-surface">
-            <RegionSelector />
-          </div>
-        </div>
-      )}
-
       <HeroSection />
       <MoodSlider />
+
+      {hasTopRated && (
+        <section className="mb-8">
+          <SectionHeader title={t('home.topRated')} subtitle={t('home.topRatedSub')} />
+          <SeriesGrid series={topRated} />
+        </section>
+      )}
+
+      {hasContinueWatching && (
+        <section className="mb-8">
+          <SectionHeader title={t('home.continueWatching')} />
+          <SeriesGrid series={continueWatching} />
+        </section>
+      )}
+
+      {hasBecauseWatched && (
+        <section className="mb-8">
+          <SectionHeader title={t('home.becauseYouWatched', { name: watchedName })} />
+          <SeriesGrid series={becauseWatched.slice(0, 8)} />
+        </section>
+      )}
+
+      {guestPicks && (
+        <section className="mb-8">
+          <SectionHeader title={t('home.personalizedPicks')} subtitle={t('home.personalizedPicksSub')} />
+          <SeriesGrid series={guestPicks} />
+        </section>
+      )}
 
       {hasTrending && (
         <section className="mb-8">
@@ -205,7 +287,37 @@ export default function HomePage() {
       {hasFreeTonight && (
         <section className="mb-8">
           <SectionHeader title={t('home.freeTonight')} subtitle={t('home.freeTonightSub')} linkTo="/discover" linkText={t('section.viewAll')} />
-          <SeriesGrid series={freeTonight} showFreeHint />
+          <div className="flex gap-2 overflow-x-auto pb-2 mb-3 -mx-1 px-1">
+            <button
+              type="button"
+              onClick={() => setFreePlatform(null)}
+              className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                freePlatform === null
+                  ? 'bg-accent text-bg border-accent'
+                  : 'bg-surface border-border text-text-secondary hover:border-accent hover:text-accent'
+              }`}
+            >
+              {t('freeFilter.all')}
+            </button>
+            {freePlatforms.map(fp => (
+              <button
+                key={fp.provider_id}
+                type="button"
+                onClick={() => setFreePlatform(fp.provider_id)}
+                className={`flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+                  freePlatform === fp.provider_id
+                    ? 'bg-accent text-bg border-accent'
+                    : 'bg-surface border-border text-text-secondary hover:border-accent hover:text-accent'
+                }`}
+              >
+                {fp.logo_url ? (
+                  <img src={fp.logo_url} alt="" loading="lazy" className="w-4 h-4 rounded object-contain" />
+                ) : null}
+                {fp.provider_name}
+              </button>
+            ))}
+          </div>
+          <SeriesGrid series={filteredFreeTonight} showFreeHint />
         </section>
       )}
     </div>

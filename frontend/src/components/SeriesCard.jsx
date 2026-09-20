@@ -65,10 +65,34 @@ export default function SeriesCard({ series, relevanceScore, showFreeHint, onRem
           )}
         </div>
 
-        {showFreeHint && freeNames.length > 0 && (
-          <span className="text-xs text-free font-medium mb-2">
-            {t('card.freeOn', { names: freeNames.join(', ') })}
-          </span>
+        {showFreeHint && (series.free_providers?.length > 0) && (
+          <div className="mb-2">
+            <div className="flex items-center gap-2">
+              <span className="text-xs text-text-muted shrink-0">{t('card.freePlatforms')}</span>
+              <div className="flex items-center gap-1.5">
+                {series.free_providers.map(p => (
+                  <span key={p.provider_id ?? p.provider_name} title={p.provider_name} className="inline-flex">
+                    {p.logo_url ? (
+                      <img
+                        src={p.logo_url}
+                        alt={p.provider_name || 'free platform'}
+                        loading="lazy"
+                        className="w-6 h-6 rounded bg-white/10 object-contain"
+                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                      />
+                    ) : (
+                      <span className="px-1.5 py-0.5 rounded bg-surface-2 border border-border text-[10px] text-text-secondary">
+                        {p.provider_name}
+                      </span>
+                    )}
+                  </span>
+                ))}
+              </div>
+            </div>
+            <span className="block text-xs text-free font-medium mt-1 truncate">
+              {t('card.freeOn', { names: series.free_providers.map(p => p.provider_name).join(', ') })}
+            </span>
+          </div>
         )}
 
         {myServices.length > 0 && (

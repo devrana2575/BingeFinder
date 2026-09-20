@@ -107,6 +107,8 @@ def get_trending(docs: List[Dict], seen_ids: Optional[set] = None, limit: int = 
     pool = [
         d for d in docs
         if d.get("series_id") not in seen_ids
+        and isinstance(d.get("rating"), (int, float))
+        and d["rating"] > 0
         and (d.get("image_medium") or d.get("image_original"))
     ]
     pool.sort(key=_index_score, reverse=True)

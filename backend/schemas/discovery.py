@@ -9,6 +9,22 @@ from typing import List, Optional
 from pydantic import BaseModel
 
 
+class FeaturedItem(BaseModel):
+    """A hero-carousel slide (Netflix-style), built from genuine catalog data."""
+
+    series_id: int
+    name: str
+    content_type: str = "tv_series"
+    rating: Optional[float] = None
+    genres: List[str] = []
+    year: Optional[str] = None
+    summary: Optional[str] = None
+    image: Optional[str] = None
+    language: Optional[str] = None
+    premiered: Optional[str] = None
+    status: Optional[str] = None
+
+
 class SurprisePick(BaseModel):
     """A single Surprise Me result, enriched with grounded reasons."""
 

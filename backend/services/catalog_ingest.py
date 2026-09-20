@@ -235,6 +235,15 @@ def _doc_key(doc: Dict[str, Any]) -> Optional[int]:
         return None
 
 
+def _row_vote_count(row: Dict[str, Any]) -> int:
+    """Number of votes a TMDb row has; 0 means nobody has rated it yet."""
+    votes = row.get("vote_count")
+    try:
+        return max(int(votes), 0) if votes is not None else 0
+    except (TypeError, ValueError):
+        return 0
+
+
 def ingest_rows(
     manager: Any,
     rows: List[Dict[str, Any]],
@@ -265,6 +274,14 @@ def ingest_rows(
             doc = normalize_tmdb_row(row, genre_map=genre_map)
         sid = _doc_key(doc)
         if sid is None or not doc.get("name"):
+            counts["skipped"] += 1
+            continue
+
+        # A title with zero votes has no rating data at all — adding it
+        # would just flood the catalog (and discover rails) with unrated
+        # noise. Skip it now; later sweeps pick it up once real audiences
+        # have rated it.
+        if _row_vote_count(row) < 1:
             counts["skipped"] += 1
             continue
 

@@ -125,6 +125,7 @@ class MongoDBManager:
         if existing_series_id_index is None:
             logger.info("No index on 'series_id' found; creating 'uniq_series_id'.")
             self._create_unique_series_id_index()
+            self._ensure_text_search_index()
             return
 
         index_name, index_spec = existing_series_id_index
@@ -133,6 +134,7 @@ class MongoDBManager:
                 "Existing index '%s' on 'series_id' is already unique; reusing it as-is.",
                 index_name,
             )
+            self._ensure_text_search_index()
             return
 
         logger.warning(
@@ -161,6 +163,47 @@ class MongoDBManager:
             raise MongoDatabaseError(f"Failed to drop conflicting index '{index_name}': {exc}") from exc
 
         self._create_unique_series_id_index()
+
+        self._ensure_text_search_index()
+
+    def _ensure_text_search_index(self) -> None:
+        """
+        Ensure the search text index on `name` + `original_name` exists.
+
+        Powers the fast `$text` gate behind /series/search and /series/suggest
+        so typeahead never scans the full catalog in Python (which, at 100k+
+        documents, turned a search into a 10-20s hang).
+
+        Notes:
+            - docs store a `language` field ("English", "Japanese", ...).
+              MongoDB's text index would normally read that field as a
+              per-document *stemming override* and abort the build on values
+              like "Japanese" (unsupported). We therefore disable stemming
+              (`default_language="none"`) and point `language_override` at a
+              field that never exists.
+            - Idempotent: if a compatible `search_text` index already exists
+              it is left untouched; a leftover/failed one is dropped first.
+        """
+        try:
+            existing = self.series.index_information().get("search_text")
+        except PyMongoError as exc:
+            logger.warning("Failed to inspect 'search_text' index: %s", exc)
+            return
+
+        want = [("name", "text"), ("original_name", "text")]
+        if existing and existing.get("key") == want and existing.get("default_language") == "none":
+            return
+        try:
+            if existing:
+                self.series.drop_index("search_text")
+            self.series.create_index(
+                want,
+                name="search_text",
+                default_language="none",
+                language_override="bf_lang_override",
+            )
+        except PyMongoError as exc:
+            logger.warning("Failed to create text search index 'search_text': %s", exc)
 
     def _create_unique_series_id_index(self) -> None:
         """Create the unique 'uniq_series_id' index. Assumes no conflicting index exists."""

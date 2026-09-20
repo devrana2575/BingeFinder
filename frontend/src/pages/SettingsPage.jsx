@@ -7,6 +7,12 @@ import { SkeletonText } from '../components/Skeletons';
 
 const GUEST_PREFS_KEY = 'bf_guest_prefs';
 
+const TYPE_OPTIONS = [
+  { value: 'movie', label: t('settings.typeMovies') },
+  { value: 'tv_series', label: t('settings.typeSeries') },
+  { value: 'anime', label: t('settings.typeAnime') },
+];
+
 const LANGUAGE_OPTIONS = [
   'English', 'Hindi', 'Spanish', 'French', 'German', 'Korean',
   'Japanese', 'Chinese', 'Italian', 'Portuguese', 'Arabic', 'Russian',
@@ -54,12 +60,13 @@ function ChipGroup({ label, hint, options, selected, onToggle, max }) {
 
 export default function SettingsPage() {
   const { isAuth } = useAuth();
-  const { region, regionName, regions, setRegion, ready: regionReady } = useRegion();
+  const { region } = useRegion();
 
   const [loading, setLoading] = useState(true);
   const [languages, setLanguages] = useState([]);
   const [genres, setGenres] = useState([]);
   const [services, setServices] = useState([]);
+  const [likedTypes, setLikedTypes] = useState([]);
   const [availableProviders, setAvailableProviders] = useState([]);
   const [providersError, setProvidersError] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -79,6 +86,7 @@ export default function SettingsPage() {
       setLanguages(prefs.languages || []);
       setGenres(prefs.genres || []);
       setServices(prefs.services || []);
+      setLikedTypes(prefs.liked_types || []);
       setLoading(false);
     };
     load();
@@ -107,7 +115,7 @@ export default function SettingsPage() {
     setSaving(true);
     setError(null);
     setSaved(false);
-    const payload = { region, languages, genres, services };
+    const payload = { languages, genres, services, liked_types: likedTypes };
     if (isAuth) {
       try {
         await api.updateSettings(payload);
@@ -116,13 +124,14 @@ export default function SettingsPage() {
         setError(e.message || t('settings.savedError'));
       }
     } else {
-      localStorage.setItem(GUEST_PREFS_KEY, JSON.stringify({ languages, genres, services }));
+      const guestPrefs = { languages, genres, services, liked_types: likedTypes };
+      localStorage.setItem(GUEST_PREFS_KEY, JSON.stringify(guestPrefs));
       setSaved(true);
     }
     setSaving(false);
-  }, [isAuth, region, languages, genres, services]);
+  }, [isAuth, languages, genres, services, likedTypes]);
 
-  if (loading || !regionReady) {
+  if (loading) {
     return (
       <div className="max-w-xl">
         <div className="h-7 w-40 skeleton mb-2" />
@@ -141,23 +150,22 @@ export default function SettingsPage() {
         </p>
       )}
 
-      <div className="rounded-xl border border-border bg-surface p-5 mb-4">
-        <label htmlFor="settings-region" className="text-sm font-semibold text-text">
-          {t('settings.region')}
-        </label>
-        <p className="text-xs text-text-muted mt-1 mb-3">{t('settings.regionHint')}</p>
-        <select
-          id="settings-region"
-          value={region || ''}
-          onChange={(e) => setRegion(e.target.value)}
-          className="w-full px-3 py-2 rounded-lg bg-bg border border-border text-text text-sm focus:border-accent"
-        >
-          {regions.map(r => <option key={r.code} value={r.code}>{r.name}</option>)}
-        </select>
-        <p className="text-xs text-text-muted mt-2">Showing: {regionName}</p>
-      </div>
-
       <div className="space-y-4 mb-6">
+        <ChipGroup
+          label={t('settings.types')}
+          hint={t('settings.typesHint')}
+          options={TYPE_OPTIONS.map(o => o.label)}
+          selected={TYPE_OPTIONS.filter(o => likedTypes.includes(o.value)).map(o => o.label)}
+          onToggle={(label) => {
+            const opt = TYPE_OPTIONS.find(o => o.label === label);
+            if (!opt) return;
+            setLikedTypes(prev =>
+              prev.includes(opt.value)
+                ? prev.filter(v => v !== opt.value)
+                : [...prev, opt.value]
+            );
+          }}
+        />
         <ChipGroup
           label={t('settings.languages')}
           hint={t('settings.languagesHint', { max: MAX_LANGUAGES })}

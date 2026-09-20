@@ -68,7 +68,7 @@ def catalog_count():
 
 @router.get("/filters")
 def filter_options():
-    docs, err = series_service.get_all_series()
+    docs, err = series_service.get_catalog_snapshot()
     if err:
         return {"genres": [], "languages": [], "years": [], "ratings": []}
     return series_service.get_filter_options(docs)
@@ -91,6 +91,15 @@ def search(
         return SeriesSearchResult(query=q, total_results=0, results=[])
 
     genres = [genre] if genre else None
+    if q.strip():
+        docs, err = series_service.get_search_candidates(
+            q, genres=genres, min_rating=min_rating, language=language,
+            year=year, status=status, content_type=content_type,
+        )
+    else:
+        docs, err = series_service.get_catalog_snapshot()
+    if err:
+        return SeriesSearchResult(query=q, total_results=0, results=[])
     filtered = series_service.search_series(
         docs, query=q, genres=genres, min_rating=min_rating,
         language=language, year=year, status=status, content_type=content_type,
@@ -108,7 +117,9 @@ def suggest(
     """Lightweight typeahead suggestions for the search boxes."""
     if not q or len(q.strip()) < 1:
         return []
-    docs, err = series_service.get_all_series()
+    docs, err = series_service.get_search_candidates(
+        q, content_type=content_type or None, limit=200,
+    )
     if err:
         return []
 

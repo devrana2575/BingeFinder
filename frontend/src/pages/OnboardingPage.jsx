@@ -19,7 +19,7 @@ const GENRE_OPTIONS = [
 const MAX_LANGUAGES = 5;
 const MAX_GENRES = 8;
 
-const STEPS = ['genres', 'languages', 'favorites'];
+const STEPS = ['region', 'genres', 'languages', 'favorites'];
 
 function Chip({ label, active, onClick, disabled }) {
   return (
@@ -81,10 +81,11 @@ function FavoriteRow({ series, loved, onToggle }) {
 
 export default function OnboardingPage() {
   const { isAuth, loading: authLoading } = useAuth();
-  const { region } = useRegion();
+  const { regions, region } = useRegion();
   const navigate = useNavigate();
 
   const [step, setStep] = useState(0);
+  const [regionCode, setRegionCode] = useState(region || 'US');
   const [languages, setLanguages] = useState([]);
   const [genres, setGenres] = useState([]);
   const [lovedIds, setLovedIds] = useState(new Set());
@@ -142,13 +143,13 @@ export default function OnboardingPage() {
     setSaving(true);
     setError(null);
     try {
-      await api.updateSettings({ region, languages, genres });
+      await api.updateSettings({ region: regionCode, languages, genres });
       navigate('/');
     } catch (e) {
       setError(e.message || t('onboarding.savedError'));
       setSaving(false);
     }
-  }, [region, languages, genres, navigate]);
+  }, [regionCode, languages, genres, navigate]);
 
   if (authLoading) return <div className="h-40 skeleton" />;
   if (!isAuth) return <Navigate to="/login" replace />;
@@ -171,6 +172,25 @@ export default function OnboardingPage() {
         <div className="mb-4 p-3 rounded-lg bg-danger/10 border border-danger/20 text-sm text-danger text-center">
           {error}
         </div>
+      )}
+
+      {stepLabel === 'region' && (
+        <fieldset className="rounded-xl border border-border bg-surface p-5">
+          <legend className="px-1 text-sm font-semibold text-text">{t('onboarding.regionTitle')}</legend>
+          <p className="text-xs text-text-muted mt-1 mb-4">
+            {t('onboarding.regionHint')}
+          </p>
+          <select
+            value={regionCode}
+            onChange={(e) => setRegionCode(e.target.value)}
+            aria-label={t('onboarding.regionTitle')}
+            className="w-full px-3 py-2 rounded-lg bg-bg border border-border text-text text-sm focus:border-accent"
+          >
+            {regions.map(r => (
+              <option key={r.code} value={r.code}>{r.name}</option>
+            ))}
+          </select>
+        </fieldset>
       )}
 
       {stepLabel === 'genres' && (

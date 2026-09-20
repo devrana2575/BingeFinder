@@ -5,8 +5,12 @@ Wraps MongoDBManager for series queries.
 """
 
 import re
+import threading
+import time
 from difflib import SequenceMatcher
 from typing import Any, Dict, List, Optional, Tuple
+
+from pymongo.errors import PyMongoError
 
 from database.mongo_client import MongoDBManager
 
@@ -27,6 +31,143 @@ def _connect() -> Tuple[MongoDBManager, None] | Tuple[None, str]:
         return manager, None
     except Exception as exc:
         return None, str(exc)
+
+
+# Fields every catalog consumer below needs, projected out of Mongo so a
+# search/filter/discovery request never transfers full documents (overviews,
+# casts, provider blobs) just to rank titles. Kept intentionally slim.
+_CATALOG_PROJECTION: Dict[str, int] = {
+    "_id": 0,
+    "series_id": 1,
+    "name": 1,
+    "original_name": 1,
+    "content_type": 1,
+    "rating": 1,
+    "language": 1,
+    "premiered": 1,
+    "ended": 1,
+    "status": 1,
+    "genres": 1,
+    "image_medium": 1,
+    "image_original": 1,
+    "weight": 1,
+    "summary": 1,
+    "runtime": 1,
+    "average_runtime": 1,
+    "network": 1,
+    "imdb_id": 1,
+    "_free_providers": 1,
+    "_free_tier": 1,
+    "_free_provider_names": 1,
+}
+
+# In-process TTL cache for the projected catalog. The catalog is changing
+# under running sweeps, so a short TTL keeps rails consistent while saving
+# the ~3s full-collection transfer per request at 150k+ documents.
+_CATALOG_SNAPSHOT_TTL_SECONDS = 120.0
+_snapshot_lock = threading.Lock()
+_catalog_snapshot_state: Dict[str, Any] = {"ts": 0.0, "data": None}
+
+
+def get_catalog_snapshot() -> Tuple[List[Dict[str, Any]], Optional[str]]:
+    """Projected, cached copy of the catalog for search/filter/discovery reads."""
+    now = time.time()
+    data = _catalog_snapshot_state["data"]
+    if data is not None and now - _catalog_snapshot_state["ts"] < _CATALOG_SNAPSHOT_TTL_SECONDS:
+        return data, None
+    with _snapshot_lock:
+        now = time.time()
+        data = _catalog_snapshot_state["data"]
+        if data is not None and now - _catalog_snapshot_state["ts"] < _CATALOG_SNAPSHOT_TTL_SECONDS:
+            return data, None
+        manager, err = _connect()
+        if err:
+            return [], err
+        try:
+            docs = [
+                dict(d) for d in manager.series.find({}, _CATALOG_PROJECTION)
+                if d.get("series_id") is not None
+            ]
+            _catalog_snapshot_state["data"] = docs
+            _catalog_snapshot_state["ts"] = time.time()
+            return docs, None
+        except Exception as exc:
+            return [], str(exc)
+        finally:
+            manager.close()
+
+
+def get_search_candidates(
+    query: str = "",
+    genres: Optional[List[str]] = None,
+    min_rating: float = 0.0,
+    language: Optional[str] = None,
+    year: Optional[int] = None,
+    status: Optional[str] = None,
+    content_type: Optional[str] = None,
+    limit: int = 10000,
+) -> Tuple[List[Dict[str, Any]], Optional[str]]:
+    """
+    Mongo pre-filtered candidate set for /series/search and /series/suggest.
+
+    Pushes the cheap filters (type, rating, language, year, status, genre)
+    into MongoDB and gates textual queries on the `search_text` index where
+    possible. Callers still run `search_series()` over the (now tiny) result
+    set for exact tier/prefix/contains ranking, so final ordering and match
+    semantics are unchanged — only the 100k+ realistic full-catalog scan is
+    eliminated.
+    """
+    manager, err = _connect()
+    if err:
+        return [], err
+    try:
+        filt: Dict[str, Any] = {}
+        if content_type:
+            ct = content_type.strip().lower()
+            if ct == "tv_series":
+                # Legacy untagged docs count as tv_series (see search_series).
+                filt["content_type"] = {"$in": ["tv_series", None]}
+            else:
+                filt["content_type"] = ct
+        if min_rating and min_rating > 0:
+            filt["rating"] = {"$gte": float(min_rating)}
+        if language:
+            filt["language"] = language
+        if year:
+            filt["premiered"] = {"$regex": f"^{int(year):d}"}
+        if status:
+            filt["status"] = status
+        if genres:
+            filt["genres"] = {"$in": list(genres)}
+
+        q = (query or "").strip()
+        if q:
+            bare_tokens = [t for t in re.split(r"[\s\-_]+", q.lower()) if t]
+            if any(len(t) >= 3 for t in bare_tokens):
+                try:
+                    text_filt = dict(filt)
+                    text_filt["$text"] = {"$search": " ".join(t for t in bare_tokens if len(t) >= 2)}
+                    matches = list(
+                        manager.series.find(text_filt, _CATALOG_PROJECTION)
+                        .sort([("score", {"$meta": "textScore"})])
+                        .limit(limit)
+                    )
+                    if len(matches) >= 2:
+                        return matches, None
+                except PyMongoError:
+                    pass
+            regex_filt = dict(filt)
+            regex_filt["$or"] = [
+                {"name": re.compile(re.escape(q), re.IGNORECASE)},
+                {"original_name": re.compile(re.escape(q), re.IGNORECASE)},
+            ]
+            return list(manager.series.find(regex_filt, _CATALOG_PROJECTION).limit(limit)), None
+
+        return list(manager.series.find(filt, _CATALOG_PROJECTION).limit(limit)), None
+    except PyMongoError as exc:
+        return [], str(exc)
+    finally:
+        manager.close()
 
 
 def get_all_series() -> Tuple[List[Dict[str, Any]], Optional[str]]:

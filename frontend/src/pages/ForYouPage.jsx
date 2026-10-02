@@ -11,7 +11,6 @@ import { t } from '../i18n';
 const TYPE_OPTIONS = [
   { value: '', labelKey: 'discover.allTypes' },
   { value: 'tv_series', labelKey: 'types.series' },
-  { value: 'movie', labelKey: 'types.movies' },
   { value: 'anime', labelKey: 'types.anime' },
 ];
 

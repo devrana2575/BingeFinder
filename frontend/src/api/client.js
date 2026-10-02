@@ -1,5 +1,19 @@
 const API_BASE = '/api';
 
+// BingeFinder ships web series + anime only. The catalog snapshot still holds
+// legacy movie rows, so they are dropped at the API boundary instead of being
+// exposed anywhere in the product surface (no backend/schema changes).
+const isSupportedType = item => item && item.content_type !== 'movie';
+
+function withoutMovies(payload) {
+  if (Array.isArray(payload)) return payload.filter(isSupportedType);
+  // Recommendation payloads wrap their list: {recommendations: [...]}
+  if (payload && Array.isArray(payload.recommendations)) {
+    return { ...payload, recommendations: payload.recommendations.filter(isSupportedType) };
+  }
+  return payload;
+}
+
 async function request(path, options = {}) {
   const token = localStorage.getItem('bf_token');
   const headers = { ...options.headers };
@@ -54,13 +68,16 @@ export const api = {
   search: (params) => {
     const qs = new URLSearchParams();
     Object.entries(params).forEach(([k, v]) => { if (v) qs.set(k, v); });
-    return request(`/series/search?${qs.toString()}`);
+    return request(`/series/search?${qs.toString()}`).then(d => ({
+      ...d,
+      results: withoutMovies(d?.results),
+    }));
   },
   suggest: (q, contentType, limit = 8) => {
     const params = new URLSearchParams({ q });
     if (contentType) params.set('content_type', contentType);
     if (limit) params.set('limit', limit);
-    return request(`/series/suggest?${params.toString()}`);
+    return request(`/series/suggest?${params.toString()}`).then(withoutMovies);
   },
   filterOptions: () => request('/series/filters'),
   getSeries: (id) => request(`/series/${id}`),
@@ -74,41 +91,41 @@ export const api = {
   },
   trending: (contentType) => {
     const qs = contentType ? `?content_type=${encodeURIComponent(contentType)}` : '';
-    return request(`/discover/trending${qs}`);
+    return request(`/discover/trending${qs}`).then(withoutMovies);
   },
   newNoteworthy: (contentType) => {
     const qs = contentType ? `?content_type=${encodeURIComponent(contentType)}` : '';
-    return request(`/discover/new-noteworthy${qs}`);
+    return request(`/discover/new-noteworthy${qs}`).then(withoutMovies);
   },
   hiddenGems: (contentType) => {
     const qs = contentType ? `?content_type=${encodeURIComponent(contentType)}` : '';
-    return request(`/discover/hidden-gems${qs}`);
+    return request(`/discover/hidden-gems${qs}`).then(withoutMovies);
   },
   freeTonight: (region, contentType) => {
     const params = new URLSearchParams();
     if (region) params.set('region', region);
     if (contentType) params.set('content_type', contentType);
     const qs = params.toString();
-    return request(`/discover/free-tonight${qs ? `?${qs}` : ''}`);
+    return request(`/discover/free-tonight${qs ? `?${qs}` : ''}`).then(withoutMovies);
   },
-  surprise: () => request('/discover/surprise'),
+  surprise: () => request('/discover/surprise').then(withoutMovies),
   vibes: () => request('/discover/vibes'),
-  vibeFiltered: (key) => request(`/discover/vibes/${key}`),
+  vibeFiltered: (key) => request(`/discover/vibes/${key}`).then(withoutMovies),
   featured: (contentType, limit = 6) => {
     const params = new URLSearchParams();
     if (contentType) params.set('content_type', contentType);
     if (limit) params.set('limit', limit);
     const qs = params.toString();
-    return request(`/discover/featured${qs ? `?${qs}` : ''}`);
+    return request(`/discover/featured${qs ? `?${qs}` : ''}`).then(withoutMovies);
   },
 
-  seriesRecs: (id) => request(`/series/${id}/recommendations`),
+  seriesRecs: (id) => request(`/series/${id}/recommendations`).then(withoutMovies),
   personalizedRecs: (region, contentType) => {
     const params = new URLSearchParams();
     if (region) params.set('region', region);
     if (contentType) params.set('content_type', contentType);
     const qs = params.toString();
-    return request(`/recommendations/personalized${qs ? `?${qs}` : ''}`);
+    return request(`/recommendations/personalized${qs ? `?${qs}` : ''}`).then(withoutMovies);
   },
 
   watchProviders: (id, region) => {

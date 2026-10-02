@@ -6,7 +6,6 @@ import Layout from './components/Layout';
 import HomePage from './pages/HomePage';
 import DiscoverPage from './pages/DiscoverPage';
 import SeriesPage from './pages/SeriesPage';
-import MoviesPage from './pages/MoviesPage';
 import AnimePage from './pages/AnimePage';
 import SurprisePage from './pages/SurprisePage';
 import SeriesDetailPage from './pages/SeriesDetailPage';
@@ -32,7 +31,6 @@ export default function App() {
               <Route path="discover" element={<DiscoverPage />} />
               <Route path="discover/vibes/:key" element={<VibesFilterPage />} />
               <Route path="series" element={<SeriesPage />} />
-              <Route path="movies" element={<MoviesPage />} />
               <Route path="anime" element={<AnimePage />} />
               <Route path="surprise" element={<SurprisePage />} />
               <Route path="series/:id" element={<SeriesDetailPage />} />

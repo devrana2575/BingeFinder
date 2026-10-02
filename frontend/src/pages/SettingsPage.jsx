@@ -8,7 +8,6 @@ import { SkeletonText } from '../components/Skeletons';
 const GUEST_PREFS_KEY = 'bf_guest_prefs';
 
 const TYPE_OPTIONS = [
-  { value: 'movie', label: t('settings.typeMovies') },
   { value: 'tv_series', label: t('settings.typeSeries') },
   { value: 'anime', label: t('settings.typeAnime') },
 ];

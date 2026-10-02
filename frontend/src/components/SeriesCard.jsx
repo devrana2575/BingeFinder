@@ -1,10 +1,29 @@
 import { Link } from 'react-router-dom';
 import PosterImage from './PosterImage';
-import RatingBadge from './RatingBadge';
-import GenreTags from './GenreTags';
 import { t } from '../i18n';
 
-export default function SeriesCard({ series, relevanceScore, showFreeHint, onRemove, removeLabel }) {
+const TYPE_LABELS = {
+  tv_series: 'card.typeSeries',
+  anime: 'card.typeAnime',
+};
+
+// Cosine similarity / relevance scores are NOT calibrated probabilities, so we
+// never render them as "92% match". Bucketed language keeps the claim honest.
+function matchLabel(score) {
+  if (score == null) return null;
+  if (score >= 0.75) return t('card.strongMatch');
+  if (score >= 0.5) return t('card.goodMatch');
+  return t('card.recommended');
+}
+
+export default function SeriesCard({
+  series,
+  relevanceScore,
+  showFreeHint,
+  showMatch = false,
+  onRemove,
+  removeLabel,
+}) {
   const id = series.series_id;
   // Recommendation endpoints return `title`; catalog/search/discovery return
   // `name`. Never render a placeholder like "Untitled" when a title exists
@@ -12,108 +31,66 @@ export default function SeriesCard({ series, relevanceScore, showFreeHint, onRem
   const title = series.name || series.title || t('card.untitled');
   const year = series.premiered ? series.premiered.slice(0, 4) : null;
   const score = relevanceScore ?? series.relevance_score;
+  const typeLabel = series.content_type === 'anime'
+    ? t(TYPE_LABELS.anime)
+    : t(TYPE_LABELS.tv_series);
+  const match = matchLabel(score);
   const freeTier = series.free_tier;
   const freeNames = series.free_provider_names || [];
-  const myServices = series._my_services || series.my_services || [];
+  const isFree = freeTier === 'free' || freeTier === 'free_with_ads';
 
   return (
-    <div className="group bg-surface border border-border rounded-xl overflow-hidden flex flex-col transition-colors duration-150 hover:border-border-hover">
-      <Link to={`/series/${id}`} className="block relative aspect-[2/3] bg-surface-2">
-        <PosterImage src={series.image} title={title} />
-        {onRemove && (
-          <button
-            type="button"
-            onClick={(e) => {
-              e.preventDefault();
-              onRemove(series);
-            }}
-            aria-label={removeLabel || 'Remove'}
-            className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/70 text-text border border-border hover:border-danger hover:text-danger flex items-center justify-center text-sm transition-colors"
-          >
-            {'\u00d7'}
-          </button>
-        )}
-        {showFreeHint && (freeTier === 'free' || freeTier === 'free_with_ads') && (
-          <span
-            className={`absolute top-2 left-2 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
-              freeTier === 'free' ? 'bg-free text-bg' : 'bg-accent text-bg'
-            }`}
-          >
-            {freeTier === 'free' ? t('card.free') : t('card.freeWithAds')}
-          </span>
-        )}
-        {showFreeHint && freeTier == null && freeNames.length > 0 && (
+    <article className="group relative flex flex-col">
+      <Link
+        to={`/series/${id}`}
+        className="block relative aspect-[2/3] rounded-xl overflow-hidden bg-surface-2 ring-1 ring-white/5 transition-all duration-200 group-hover:ring-accent/60 group-hover:shadow-[0_10px_30px_-12px_rgba(41,121,255,0.55)] group-focus-visible:ring-2 group-focus-visible:ring-accent-light"
+      >
+        <PosterImage src={series.image} title={title} className="transition-transform duration-300 group-hover:scale-[1.04]" />
+
+        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/10 to-transparent opacity-70 group-hover:opacity-90 transition-opacity" />
+
+        {(showFreeHint && (isFree || (freeTier == null && freeNames.length > 0))) && (
           <span className="absolute top-2 left-2 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-free text-bg">
-            {t('card.free')}
+            {isFree && freeTier === 'free_with_ads' ? t('card.freeWithAds') : t('card.free')}
           </span>
         )}
-      </Link>
 
-      <div className="p-3 flex flex-col flex-1">
-        <Link to={`/series/${id}`}>
-          <h3 className="font-semibold text-sm text-text leading-snug line-clamp-2 mb-1 hover:text-accent transition-colors">
-            {title}{year ? ` (${year})` : ''}
-          </h3>
-        </Link>
+        {showMatch && match && (
+          <span className="absolute top-2 right-2 px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider bg-black/65 backdrop-blur-sm text-accent-light ring-1 ring-accent/40">
+            {match}
+          </span>
+        )}
 
-        <div className="flex items-center gap-1.5 flex-wrap mb-2">
-          <RatingBadge rating={series.rating} />
-          {score != null && (
-            <span className="text-xs font-semibold text-accent">
-              {t('card.match', { score: Math.round(score * 100) })}
+        <div className="absolute inset-x-0 bottom-0 p-2.5">
+          {series.rating != null && (
+            <span className="inline-flex items-center gap-1 text-[11px] font-bold text-warning">
+              <span aria-hidden>★</span>{series.rating.toFixed(1)}
             </span>
           )}
         </div>
+      </Link>
 
-        {showFreeHint && (series.free_providers?.length > 0) && (
-          <div className="mb-2">
-            <div className="flex items-center gap-2">
-              <span className="text-xs text-text-muted shrink-0">{t('card.freePlatforms')}</span>
-              <div className="flex items-center gap-1.5">
-                {series.free_providers.map(p => (
-                  <span key={p.provider_id ?? p.provider_name} title={p.provider_name} className="inline-flex">
-                    {p.logo_url ? (
-                      <img
-                        src={p.logo_url}
-                        alt={p.provider_name || 'free platform'}
-                        loading="lazy"
-                        className="w-6 h-6 rounded bg-white/10 object-contain"
-                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                      />
-                    ) : (
-                      <span className="px-1.5 py-0.5 rounded bg-surface-2 border border-border text-[10px] text-text-secondary">
-                        {p.provider_name}
-                      </span>
-                    )}
-                  </span>
-                ))}
-              </div>
-            </div>
-            <span className="block text-xs text-free font-medium mt-1 truncate">
-              {t('card.freeOn', { names: series.free_providers.map(p => p.provider_name).join(', ') })}
-            </span>
-          </div>
-        )}
+      {onRemove && (
+        <button
+          type="button"
+          onClick={(e) => { e.preventDefault(); onRemove(series); }}
+          aria-label={removeLabel || t('action.remove')}
+          className="absolute top-2 right-2 w-7 h-7 rounded-full bg-black/70 text-text ring-1 ring-border hover:bg-danger hover:text-white flex items-center justify-center text-sm transition-colors z-10"
+        >
+          {'\u00d7'}
+        </button>
+      )}
 
-        {myServices.length > 0 && (
-          <span className="text-xs font-semibold text-accent mb-2">
-            {t('card.onServices', { names: myServices.join(', ') })}
-          </span>
-        )}
-
-        <div className="mb-3">
-          <GenreTags genres={series.genres} />
-        </div>
-
-        <div className="mt-auto">
-          <Link
-            to={`/series/${id}`}
-            className="block w-full text-center py-2 rounded-lg text-sm font-semibold text-text-secondary border border-border hover:border-accent hover:text-accent transition-colors"
-          >
-            {t('card.viewDetails')}
-          </Link>
-        </div>
+      <div className="mt-2">
+        <Link to={`/series/${id}`} className="block">
+          <h3 className="font-semibold text-sm text-text leading-snug line-clamp-2 hover:text-accent transition-colors">
+            {title}
+          </h3>
+        </Link>
+        <p className="text-[11px] text-text-muted mt-0.5 truncate">
+          {typeLabel}{year ? ` · ${year}` : ''}
+        </p>
       </div>
-    </div>
+    </article>
   );
 }

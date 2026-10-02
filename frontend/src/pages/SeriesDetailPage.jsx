@@ -146,11 +146,18 @@ export default function SeriesDetailPage() {
         </div>
 
         <div className="flex-1 min-w-0">
-          <h1 className="text-2xl sm:text-3xl font-bold text-text mb-2">{series.name}</h1>
+          <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight text-text mb-2 leading-tight">{series.name}</h1>
+
+          <p className="text-xs font-semibold uppercase tracking-wider text-accent-light mb-2">
+            {series.content_type === 'anime' ? t('card.typeAnime') : t('card.typeSeries')}
+          </p>
 
           <div className="flex items-center gap-2 flex-wrap mb-3">
             <RatingBadge rating={series.rating} />
             {series.premiered && <span className="text-sm text-text-muted">{series.premiered.slice(0, 4)}</span>}
+            {(series.runtime > 0 || series.average_runtime > 0) && (
+              <span className="text-sm text-text-muted">{series.runtime || series.average_runtime} min</span>
+            )}
             {series.language && <span className="text-sm text-text-muted">{series.language}</span>}
             {series.status && (
               <span className="text-xs px-2 py-0.5 rounded bg-surface-2 text-text-muted">{series.status}</span>
@@ -214,12 +221,14 @@ export default function SeriesDetailPage() {
       </div>
 
       {recs?.why_recommended?.length > 0 && (
-        <section className="mb-8 rounded-xl border border-border bg-surface p-5">
-          <h2 className="text-base font-semibold text-text mb-2">{t('detail.whyRecommendedTitle')}</h2>
-          <ul className="space-y-1">
+        <section className="mb-8 rounded-2xl bg-surface ring-1 ring-border p-5">
+          <h2 className="text-xs font-bold uppercase tracking-[0.14em] text-accent-light mb-3">
+            {t('whyThis.title')}
+          </h2>
+          <ul className="space-y-1.5">
             {recs.why_recommended.map((reason, i) => (
               <li key={i} className="text-sm text-text-secondary flex items-start gap-2">
-                <span className="text-accent mt-0.5">&#8226;</span>
+                <span className="text-accent mt-0.5 flex-shrink-0" aria-hidden>&#10003;</span>
                 {reason}
               </li>
             ))}
@@ -231,10 +240,10 @@ export default function SeriesDetailPage() {
 
       {recs?.recommendations?.length > 0 && (
         <section className="mb-8">
-          <h2 className="text-base font-semibold text-text mb-3">{t('detail.alsoLike')}</h2>
+          <h2 className="text-lg font-bold text-text tracking-tight mb-3">{t('detail.alsoLike')}</h2>
           <SeriesGrid
             series={recs.recommendations}
-            relevanceScores={Object.fromEntries(recs.recommendations.map(r => [r.series_id, r.relevance_score]))}
+            showMatch
           />
         </section>
       )}

@@ -4,83 +4,59 @@ import { api } from '../api/client';
 import { useAuth } from '../context/AuthContext';
 import { useRegion } from '../context/RegionContext';
 import { t } from '../i18n';
-import SeriesGrid from '../components/SeriesGrid';
+import Hero from '../components/Hero';
+import PosterRail from '../components/PosterRail';
 import SearchSuggest from '../components/SearchSuggest';
 import { SkeletonGrid } from '../components/Skeletons';
 import ErrorState from '../components/ErrorState';
 import EmptyState from '../components/EmptyState';
 
-function HeroSection() {
+function HeroActions() {
   const navigate = useNavigate();
 
   return (
-    <section className="mb-8">
-      <h1 className="text-lg sm:text-xl font-bold text-text mb-1" style={{ fontFamily: 'Sora, sans-serif' }}>
-        {t('hero.title')}
-      </h1>
-      <p className="text-text-muted text-sm mb-3 max-w-lg">
-        {t('hero.subtitleNoCount')}
-      </p>
-      <div className="max-w-lg">
+    <div className="flex flex-col sm:flex-row gap-3 sm:items-center">
+      <div className="flex-1 min-w-0 max-w-xl">
         <label htmlFor="hero-search" className="sr-only">{t('hero.searchLabel')}</label>
         <SearchSuggest
           onSearch={q => navigate(`/discover?q=${encodeURIComponent(q.trim())}`)}
-          actionLabel={t('hero.searchButton')}
           placeholder={t('hero.searchPlaceholder')}
-          inputClassName="flex-1 px-4 py-2.5 rounded-lg bg-bg border border-border text-text text-sm placeholder:text-text-muted focus:border-accent"
+          containerClassName="w-full"
+          inputClassName="w-full px-4 py-3 rounded-full bg-bg/70 backdrop-blur border border-border text-text text-sm placeholder:text-text-muted focus:border-accent focus:outline-none"
         />
       </div>
-      <Link to="/surprise" className="inline-block mt-3 text-sm text-text-secondary hover:text-accent transition-colors">
-        {t('hero.surpriseLink')}
+      <Link
+        to="/surprise"
+        className="btn-primary flex-shrink-0 px-5 py-3 text-sm whitespace-nowrap"
+      >
+        <span aria-hidden className="mr-1.5">✦</span>{t('hero.surpriseCta')}
       </Link>
-    </section>
+    </div>
   );
 }
 
-function MoodSlider() {
+function VibeChips() {
   const [moods, setMoods] = useState([]);
 
   useEffect(() => {
     api.vibes()
-      .then(data => {
-        const items = Object.entries(data).map(([key, val]) => ({
-          key, label: val.label,
-        }));
-        setMoods(items);
-      })
+      .then(data => setMoods(Object.entries(data).map(([key, val]) => ({ key, label: val.label }))))
       .catch(() => {});
   }, []);
 
   if (!moods.length) return null;
 
   return (
-    <section className="mb-8">
-      <h2 className="text-base font-semibold text-text mb-3">{t('mood.title')}</h2>
-      <div className="flex gap-2 overflow-x-auto pb-2 -mx-1 px-1">
-        {moods.map(m => (
-          <Link
-            key={m.key}
-            to={`/discover/vibes/${m.key}`}
-            className="flex-shrink-0 px-4 py-2 rounded-lg bg-surface border border-border text-sm text-text-secondary hover:border-accent hover:text-accent transition-colors whitespace-nowrap"
-          >
-            {m.label}
-          </Link>
-        ))}
-      </div>
-    </section>
-  );
-}
-
-function SectionHeader({ title, subtitle, linkTo, linkText }) {
-  return (
-    <div className="flex items-end justify-between mb-3">
-      <div>
-        <h2 className="text-base font-semibold text-text">{title}</h2>
-        {subtitle && <p className="text-xs text-text-muted mt-0.5">{subtitle}</p>}
-      </div>
-      {linkTo && (
-        <Link to={linkTo} className="text-xs text-accent hover:underline flex-shrink-0">{linkText || t('section.viewAll')}</Link>
-      )}
+    <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 mt-5">
+      {moods.map(m => (
+        <Link
+          key={m.key}
+          to={`/discover/vibes/${m.key}`}
+          className="flex-shrink-0 px-3.5 py-1.5 rounded-full bg-white/5 hover:bg-accent/20 ring-1 ring-border text-xs font-medium text-text-secondary hover:text-accent-light transition-colors whitespace-nowrap"
+        >
+          {m.label}
+        </Link>
+      ))}
     </div>
   );
 }
@@ -92,11 +68,10 @@ export default function HomePage() {
   const [gems, setGems] = useState(null);
   const [recs, setRecs] = useState(null);
   const [freeTonight, setFreeTonight] = useState(null);
-  const [topRated, setTopRated] = useState(null);
+  const [featured, setFeatured] = useState(null);
   const [newNoteworthy, setNewNoteworthy] = useState(null);
-  const [continueWatching, setContinueWatching] = useState(null);
   const [becauseWatched, setBecauseWatched] = useState(null);
-  const [freePlatform, setFreePlatform] = useState(null);
+  const [watchedName, setWatchedName] = useState(null);
   const [error, setError] = useState(null);
 
   const load = useCallback(() => {
@@ -105,47 +80,42 @@ export default function HomePage() {
     setGems(null);
     setRecs(null);
     setFreeTonight(null);
-    setTopRated(null);
+    setFeatured(null);
     setNewNoteworthy(null);
-    setContinueWatching(null);
     setBecauseWatched(null);
-    setFreePlatform(null);
+    setWatchedName(null);
 
     api.trending()
-      .then(d => setTrending(d))
+      .then(setTrending)
       .catch(e => { console.error(e); setTrending([]); });
-    api.featured(undefined, 8)
-      .then(d => setTopRated(d))
-      .catch(e => { console.error(e); setTopRated([]); });
+    // /discover/featured returns landscape backdrops — used for the hero art.
+    api.featured(undefined, 4)
+      .then(setFeatured)
+      .catch(e => { console.error(e); setFeatured([]); });
     api.hiddenGems()
-      .then(d => setGems(d))
+      .then(setGems)
       .catch(e => { console.error(e); setGems([]); });
     api.freeTonight(region)
-      .then(d => setFreeTonight(d))
+      .then(setFreeTonight)
       .catch(e => { console.error(e); setFreeTonight([]); });
     api.newNoteworthy()
-      .then(d => setNewNoteworthy(d))
+      .then(setNewNoteworthy)
       .catch(e => { console.error(e); setNewNoteworthy([]); });
+
     if (isAuth) {
       api.personalizedRecs(region)
-        .then(d => setRecs(d))
+        .then(setRecs)
         .catch(e => { console.error(e); setRecs([]); });
       api.recentlyViewed()
         .then(d => {
-          setContinueWatching(d);
           const last = d?.[0];
-          if (last) {
-            api.seriesRecs(last.series_id)
-              .then(res => {
-                const list = Array.isArray(res) ? res : res?.recommendations || [];
-                setBecauseWatched(list);
-              })
-              .catch(() => setBecauseWatched([]));
-          } else {
-            setBecauseWatched([]);
-          }
+          if (!last) return;
+          setWatchedName(last.name);
+          return api.seriesRecs(last.series_id)
+            .then(res => setBecauseWatched(Array.isArray(res) ? res : res?.recommendations || []))
+            .catch(() => setBecauseWatched([]));
         })
-        .catch(e => { console.error(e); setContinueWatching([]); setBecauseWatched([]); });
+        .catch(e => { console.error(e); });
     }
   }, [isAuth, region]);
 
@@ -157,7 +127,6 @@ export default function HomePage() {
     try { prefs = JSON.parse(localStorage.getItem('bf_guest_prefs') || '{}'); } catch {}
     const likedTypes = new Set(prefs.liked_types || []);
     const genres = new Set((prefs.genres || []).map(g => String(g).toLowerCase()));
-    const languages = new Set((prefs.languages || []).map(l => String(l).toLowerCase()));
 
     const pool = trending.filter(s => {
       if (likedTypes.size > 0 && !likedTypes.has(s.content_type)) return false;
@@ -165,22 +134,19 @@ export default function HomePage() {
       return true;
     });
     if (pool.length === 0) return null;
-    const langScore = s => languages.size > 0 && s.language && languages.has(String(s.language).toLowerCase()) ? 1 : 0;
-    return [...pool].sort((a, b) =>
-      (langScore(b) - langScore(a)) || ((b.rating || 0) - (a.rating || 0))
-    ).slice(0, 10);
+    return [...pool].sort((a, b) => (b.rating || 0) - (a.rating || 0)).slice(0, 12);
   }, [isAuth, trending]);
 
   const nothingLoaded = trending === null && gems === null && freeTonight === null &&
-    newNoteworthy === null && (recs === null || !isAuth);
+    newNoteworthy === null && featured === null;
 
   if (nothingLoaded) {
     return (
       <>
-        <div className="rounded-2xl border border-border bg-surface p-8 sm:p-12 mb-8">
-          <div className="h-8 w-64 skeleton mb-2" />
+        <div className="rounded-2xl bg-surface p-8 sm:p-12 mb-9">
+          <div className="h-10 w-72 skeleton mb-3" />
           <div className="h-4 w-96 skeleton mb-6" />
-          <div className="h-10 w-full max-w-lg skeleton rounded-lg" />
+          <div className="h-12 w-full max-w-xl skeleton rounded-full" />
         </div>
         <SkeletonGrid count={5} />
       </>
@@ -189,136 +155,84 @@ export default function HomePage() {
 
   if (error) return <ErrorState message={error} onRetry={load} />;
 
-  const hasTrending = trending?.length > 0;
-  const hasTopRated = topRated?.length > 0;
-  const hasGems = gems?.length > 0;
-  const hasRecs = recs?.length > 0;
-  const hasFreeTonight = freeTonight?.length > 0;
-  const hasNewNoteworthy = newNoteworthy?.length > 0;
-  const hasContinueWatching = isAuth && continueWatching?.length > 0;
-  const watchedName = continueWatching?.[0]?.name;
-  const hasBecauseWatched = isAuth && watchedName && becauseWatched?.length > 0;
-
-  const freePlatforms = [
-    ...new Map(
-      (freeTonight || [])
-        .flatMap(s => s.free_providers || [])
-        .filter(p => p.provider_id && p.provider_name)
-        .map(p => [p.provider_id, p])
-    ).values(),
-  ];
-  const filteredFreeTonight = freePlatform
-    ? (freeTonight || []).filter(s => (s.free_providers || []).some(p => p.provider_id === freePlatform))
-    : (freeTonight || []);
+  const count = (featured?.length || 0) + (trending?.length || 0);
+  const hasRecs = isAuth && recs?.length > 0;
 
   return (
     <div>
-      <HeroSection />
-      <MoodSlider />
+      <Hero
+        backdrops={(featured || []).map(f => f.image)}
+        brand={t('hero.brand')}
+        title={t('hero.title')}
+        tagline={t('hero.tagline')}
+        subtitle={t('hero.subtitle')}
+        count={count > 0 ? count : null}
+      >
+        <HeroActions />
+        <VibeChips />
+      </Hero>
 
-      {hasTopRated && (
-        <section className="mb-8">
-          <SectionHeader title={t('home.topRated')} subtitle={t('home.topRatedSub')} />
-          <SeriesGrid series={topRated} />
-        </section>
+      {(hasRecs || guestPicks) && (
+        <PosterRail
+          title={t('home.personalizedPicks')}
+          subtitle={isAuth ? t('home.recommendedForYouSub') : t('home.personalizedPicksSub')}
+          series={hasRecs ? recs : guestPicks}
+          linkTo="/for-you"
+          showMatch
+        />
       )}
 
-      {hasContinueWatching && (
-        <section className="mb-8">
-          <SectionHeader title={t('home.continueWatching')} />
-          <SeriesGrid series={continueWatching} />
-        </section>
+      {trending?.length > 0 && (
+        <PosterRail
+          title={t('home.trending')}
+          subtitle={t('home.trendingSub')}
+          series={trending}
+          linkTo="/discover"
+        />
       )}
 
-      {hasBecauseWatched && (
-        <section className="mb-8">
-          <SectionHeader title={t('home.becauseYouWatched', { name: watchedName })} />
-          <SeriesGrid series={becauseWatched.slice(0, 8)} />
-        </section>
+      {becauseWatched?.length > 0 && (
+        <PosterRail
+          title={`${t('home.becauseYouWatched', { name: watchedName })}`}
+          series={becauseWatched.slice(0, 12)}
+          showMatch
+        />
       )}
 
-      {guestPicks && (
-        <section className="mb-8">
-          <SectionHeader title={t('home.personalizedPicks')} subtitle={t('home.personalizedPicksSub')} />
-          <SeriesGrid series={guestPicks} />
-        </section>
+      {gems?.length > 0 && (
+        <PosterRail
+          title={t('home.hiddenGems')}
+          subtitle={t('home.hiddenGemsSub')}
+          series={gems}
+          linkTo="/discover"
+          linkText={t('section.discoverMore')}
+        />
       )}
 
-      {hasTrending && (
-        <section className="mb-8">
-          <SectionHeader title={t('home.trending')} subtitle={t('home.trendingSub')} />
-          <SeriesGrid series={trending} />
-        </section>
+      {newNoteworthy?.length > 0 && (
+        <PosterRail
+          title={t('home.newNoteworthy')}
+          subtitle={t('home.newNoteworthySub')}
+          series={newNoteworthy}
+        />
       )}
 
-      {isAuth && hasRecs && (
-        <section className="mb-8">
-          <SectionHeader title={t('home.recommendedForYou')} subtitle={t('home.recommendedForYouSub')} linkTo="/for-you" />
-          <SeriesGrid
-            series={recs}
-            relevanceScores={Object.fromEntries(recs.map(r => [r.series_id, r.relevance_score]))}
-          />
-        </section>
+      {freeTonight?.length > 0 && (
+        <PosterRail
+          title={t('home.freeTonight')}
+          subtitle={t('home.freeTonightSub')}
+          series={freeTonight}
+          linkTo="/discover"
+          showFreeHint
+        />
       )}
 
       {isAuth && !hasRecs && (
-        <section className="mb-8">
-          <EmptyState
-            title={t('home.personalizedComing')}
-            message={t('home.personalizedComingMsg')}
-          />
-        </section>
-      )}
-
-      {hasGems && (
-        <section className="mb-8">
-          <SectionHeader title={t('home.hiddenGems')} subtitle={t('home.hiddenGemsSub')} linkTo="/discover" linkText={t('section.discoverMore')} />
-          <SeriesGrid series={gems} />
-        </section>
-      )}
-
-      {hasNewNoteworthy && (
-        <section className="mb-8">
-          <SectionHeader title={t('home.newNoteworthy')} subtitle={t('home.newNoteworthySub')} />
-          <SeriesGrid series={newNoteworthy} />
-        </section>
-      )}
-
-      {hasFreeTonight && (
-        <section className="mb-8">
-          <SectionHeader title={t('home.freeTonight')} subtitle={t('home.freeTonightSub')} linkTo="/discover" linkText={t('section.viewAll')} />
-          <div className="flex gap-2 overflow-x-auto pb-2 mb-3 -mx-1 px-1">
-            <button
-              type="button"
-              onClick={() => setFreePlatform(null)}
-              className={`flex-shrink-0 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
-                freePlatform === null
-                  ? 'bg-accent text-bg border-accent'
-                  : 'bg-surface border-border text-text-secondary hover:border-accent hover:text-accent'
-              }`}
-            >
-              {t('freeFilter.all')}
-            </button>
-            {freePlatforms.map(fp => (
-              <button
-                key={fp.provider_id}
-                type="button"
-                onClick={() => setFreePlatform(fp.provider_id)}
-                className={`flex-shrink-0 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
-                  freePlatform === fp.provider_id
-                    ? 'bg-accent text-bg border-accent'
-                    : 'bg-surface border-border text-text-secondary hover:border-accent hover:text-accent'
-                }`}
-              >
-                {fp.logo_url ? (
-                  <img src={fp.logo_url} alt="" loading="lazy" className="w-4 h-4 rounded object-contain" />
-                ) : null}
-                {fp.provider_name}
-              </button>
-            ))}
-          </div>
-          <SeriesGrid series={filteredFreeTonight} showFreeHint />
-        </section>
+        <EmptyState
+          title={t('home.personalizedComing')}
+          message={t('home.personalizedComingMsg')}
+          action={<Link to="/discover" className="btn-primary">{t('cta.startBrowsing')}</Link>}
+        />
       )}
     </div>
   );

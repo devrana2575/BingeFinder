@@ -125,7 +125,6 @@ export default function DiscoverPage() {
             className="px-3 py-1.5 rounded-lg bg-surface border border-border text-sm text-text-secondary focus:border-accent">
             <option value="">{t('discover.allTypes')}</option>
             <option value="tv_series">{t('discover.typeSeries')}</option>
-            <option value="movie">{t('discover.typeMovies')}</option>
             <option value="anime">{t('discover.typeAnime')}</option>
           </select>
 

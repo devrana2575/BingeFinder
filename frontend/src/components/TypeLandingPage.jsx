@@ -1,46 +1,42 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api/client';
+import { useAuth } from '../context/AuthContext';
 import { useRegion } from '../context/RegionContext';
 import { t } from '../i18n';
-import SeriesGrid from './SeriesGrid';
-import SearchSuggest from './SearchSuggest';
-import { SkeletonGrid } from './Skeletons';
-import ErrorState from './ErrorState';
-import EmptyState from './EmptyState';
+import Hero from '../components/Hero';
+import PosterRail from '../components/PosterRail';
+import SearchSuggest from '../components/SearchSuggest';
+import { SkeletonGrid } from '../components/Skeletons';
+import ErrorState from '../components/ErrorState';
+import EmptyState from '../components/EmptyState';
 
 const TYPE_LABELS = {
   tv_series: 'types.series',
-  movie: 'types.movies',
   anime: 'types.anime',
 };
 
 const TYPE_SUBTITLES = {
   tv_series: 'types.seriesSub',
-  movie: 'types.moviesSub',
   anime: 'types.animeSub',
 };
 
-function SectionHeader({ title, linkTo, viewAll }) {
-  return (
-    <div className="flex items-end justify-between mb-3">
-      <h2 className="text-base font-semibold text-text">{title}</h2>
-      {linkTo && (
-        <Link to={linkTo} className="text-xs text-accent hover:underline flex-shrink-0">
-          {viewAll || t('section.viewAll')}
-        </Link>
-      )}
-    </div>
-  );
-}
-
+/**
+ * Shared landing experience for /series and /anime. Both categories get the
+ * same first-class treatment: cinematic hero, search, trending, popular,
+ * hidden gems, because-you-watched, new & noteworthy, free tonight.
+ */
 export default function TypeLandingPage({ type }) {
   const { region } = useRegion();
+  const { isAuth } = useAuth();
   const navigate = useNavigate();
   const [trending, setTrending] = useState(null);
+  const [popular, setPopular] = useState(null);
   const [gems, setGems] = useState(null);
   const [freeTonight, setFreeTonight] = useState(null);
   const [newNoteworthy, setNewNoteworthy] = useState(null);
+  const [becauseWatched, setBecauseWatched] = useState(null);
+  const [watchedName, setWatchedName] = useState(null);
   const [error, setError] = useState(null);
 
   const labelKey = TYPE_LABELS[type] || 'types.series';
@@ -49,36 +45,55 @@ export default function TypeLandingPage({ type }) {
   const load = useCallback(() => {
     setError(null);
     setTrending(null);
+    setPopular(null);
     setGems(null);
     setFreeTonight(null);
     setNewNoteworthy(null);
+    setBecauseWatched(null);
+    setWatchedName(null);
 
     api.trending(type)
-      .then(d => setTrending(d))
+      .then(setTrending)
       .catch(e => { console.error(e); setTrending([]); });
+    api.featured(type, 4)
+      .then(setPopular)
+      .catch(e => { console.error(e); setPopular([]); });
     api.hiddenGems(type)
-      .then(d => setGems(d))
+      .then(setGems)
       .catch(e => { console.error(e); setGems([]); });
     api.freeTonight(region, type)
-      .then(d => setFreeTonight(d))
+      .then(setFreeTonight)
       .catch(e => { console.error(e); setFreeTonight([]); });
     api.newNoteworthy(type)
-      .then(d => setNewNoteworthy(d))
+      .then(setNewNoteworthy)
       .catch(e => { console.error(e); setNewNoteworthy([]); });
-  }, [type, region]);
+
+    if (isAuth) {
+      api.recentlyViewed()
+        .then(d => {
+          const last = d?.[0];
+          if (!last) return;
+          setWatchedName(last.name);
+          return api.seriesRecs(last.series_id)
+            .then(res => setBecauseWatched(Array.isArray(res) ? res : res?.recommendations || []))
+            .catch(() => setBecauseWatched([]));
+        })
+        .catch(() => {});
+    }
+  }, [type, region, isAuth]);
 
   useEffect(load, [load]);
 
-  const nothingLoaded = trending === null && gems === null && freeTonight === null &&
-    newNoteworthy === null;
+  const nothingLoaded = trending === null && popular === null && gems === null &&
+    freeTonight === null && newNoteworthy === null;
 
   if (nothingLoaded) {
     return (
       <>
-        <div className="rounded-2xl border border-border bg-surface p-8 mb-8">
-          <div className="h-8 w-64 skeleton mb-2" />
+        <div className="rounded-2xl bg-surface p-8 mb-9">
+          <div className="h-10 w-64 skeleton mb-3" />
           <div className="h-4 w-96 skeleton mb-6" />
-          <div className="h-10 w-full max-w-lg skeleton rounded-lg" />
+          <div className="h-12 w-full max-w-lg skeleton rounded-full" />
         </div>
         <SkeletonGrid count={5} />
       </>
@@ -87,33 +102,38 @@ export default function TypeLandingPage({ type }) {
 
   if (error) return <ErrorState message={error} onRetry={load} />;
 
-  const hasAny = (trending?.length || 0) + (gems?.length || 0) + (freeTonight?.length || 0) + (newNoteworthy?.length || 0) > 0;
+  const total = (trending?.length || 0) + (popular?.length || 0) + (gems?.length || 0) +
+    (freeTonight?.length || 0) + (newNoteworthy?.length || 0);
 
   return (
     <div>
-      <section className="rounded-2xl border border-border bg-surface p-8 sm:p-10 mb-8">
-        <h1 className="text-2xl sm:text-3xl font-bold text-text mb-1" style={{ fontFamily: 'Sora, sans-serif' }}>
-          {t(labelKey)}
-        </h1>
-        <p className="text-text-muted text-sm mb-5 max-w-lg">
-          {t(subKey)}
-        </p>
-        <div className="max-w-lg">
+      <Hero
+        backdrops={(popular || []).map(f => f.image)}
+        brand={t(labelKey)}
+        title={t(subKey)}
+        tagline={t('hero.tagline')}
+        subtitle={t('hero.subtitle')}
+        count={total || null}
+      >
+        <div className="max-w-xl">
           <label htmlFor={`${type}-search`} className="sr-only">{t('types.searchLabel')}</label>
           <SearchSuggest
             contentType={type}
             onSearch={q => navigate(`/discover?type=${type}&q=${encodeURIComponent(q.trim())}`)}
-            actionLabel={t('types.searchButton')}
             placeholder={t('types.searchPlaceholder', { label: t(labelKey) })}
-            inputClassName="flex-1 px-4 py-2.5 rounded-lg bg-bg border border-border text-text text-sm placeholder:text-text-muted focus:border-accent"
+            containerClassName="w-full"
+            inputClassName="w-full px-4 py-3 rounded-full bg-bg/70 backdrop-blur border border-border text-text text-sm placeholder:text-text-muted focus:border-accent focus:outline-none"
           />
         </div>
-        <Link to={`/discover?type=${type}`} className="inline-block mt-4 text-sm text-text-secondary hover:text-accent transition-colors">
-          {t('types.browseAll', { label: t(labelKey) })}
+        <Link
+          to={`/discover?type=${type}`}
+          className="inline-block mt-4 text-sm font-semibold text-accent-light hover:text-accent transition-colors"
+        >
+          {t('types.browseAll', { label: t(labelKey) })} →
         </Link>
-      </section>
+      </Hero>
 
-      {!hasAny ? (
+      {total === 0 ? (
         <EmptyState
           title={t('types.emptyTitle', { label: t(labelKey) })}
           message={t('types.emptyMsg', { label: t(labelKey) })}
@@ -121,31 +141,36 @@ export default function TypeLandingPage({ type }) {
       ) : (
         <>
           {trending?.length > 0 && (
-            <section className="mb-8">
-              <SectionHeader title={t('home.trending')} subtitle={null} linkTo={`/discover?type=${type}`} />
-              <SeriesGrid series={trending} />
-            </section>
+            <PosterRail title={t('home.trending')} series={trending} linkTo={`/discover?type=${type}`} />
+          )}
+
+          {popular?.length > 0 && (
+            <PosterRail title={t('home.popular')} series={popular} linkTo={`/discover?type=${type}`} />
+          )}
+
+          {becauseWatched?.length > 0 && (
+            <PosterRail
+              title={t('home.becauseYouWatched', { name: watchedName })}
+              series={becauseWatched.slice(0, 12)}
+              showMatch
+            />
           )}
 
           {gems?.length > 0 && (
-            <section className="mb-8">
-              <SectionHeader title={t('home.hiddenGems')} linkTo={`/discover?type=${type}`} />
-              <SeriesGrid series={gems} />
-            </section>
+            <PosterRail title={t('home.hiddenGems')} subtitle={t('home.hiddenGemsSub')} series={gems} />
           )}
 
           {newNoteworthy?.length > 0 && (
-            <section className="mb-8">
-              <SectionHeader title={t('home.newNoteworthy')} />
-              <SeriesGrid series={newNoteworthy} />
-            </section>
+            <PosterRail title={t('home.newNoteworthy')} subtitle={t('home.newNoteworthySub')} series={newNoteworthy} />
           )}
 
           {freeTonight?.length > 0 && (
-            <section className="mb-8">
-              <SectionHeader title={t('home.freeTonight')} linkTo={`/discover?type=${type}`} />
-              <SeriesGrid series={freeTonight} showFreeHint />
-            </section>
+            <PosterRail
+              title={t('home.freeTonight')}
+              subtitle={t('home.freeTonightSub')}
+              series={freeTonight}
+              showFreeHint
+            />
           )}
         </>
       )}

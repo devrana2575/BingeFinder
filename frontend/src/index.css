@@ -138,6 +138,17 @@ h1, h2, h3, h4, h5, h6 {
   grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
 }
 
+/* Horizontal rails: hide the scrollbar chrome but keep native scrolling
+   (swipe / trackpad / keyboard) so mobile rails feel native. */
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar { display: none; }
+
+/* Never allow a page-wide horizontal scrollbar. */
+html, body { overflow-x: hidden; }
+
 @media (max-width: 640px) {
   .card-grid {
     grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));

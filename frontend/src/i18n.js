@@ -95,6 +95,8 @@ const LOCALE_EN = {
   'home.becauseYouWatched': 'Because you watched {name}',
   'home.trending': 'Trending Now',
   'home.trendingSub': 'What everyone is watching right now',
+  'home.trendingSeries': 'Trending Web Series',
+  'home.trendingAnime': 'Trending Anime',
   'home.newNoteworthy': 'New & Noteworthy',
   'home.newNoteworthySub': 'Fresh premieres worth your time',
   'home.recommendedForYou': 'For You',

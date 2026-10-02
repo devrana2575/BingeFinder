@@ -65,6 +65,8 @@ export default function HomePage() {
   const { isAuth } = useAuth();
   const { region } = useRegion();
   const [trending, setTrending] = useState(null);
+  const [trendingSeries, setTrendingSeries] = useState(null);
+  const [trendingAnime, setTrendingAnime] = useState(null);
   const [gems, setGems] = useState(null);
   const [recs, setRecs] = useState(null);
   const [freeTonight, setFreeTonight] = useState(null);
@@ -77,6 +79,8 @@ export default function HomePage() {
   const load = useCallback(() => {
     setError(null);
     setTrending(null);
+    setTrendingSeries(null);
+    setTrendingAnime(null);
     setGems(null);
     setRecs(null);
     setFreeTonight(null);
@@ -88,6 +92,13 @@ export default function HomePage() {
     api.trending()
       .then(setTrending)
       .catch(e => { console.error(e); setTrending([]); });
+    // Trending is split by category so both core categories lead the homepage.
+    api.trending('tv_series')
+      .then(setTrendingSeries)
+      .catch(e => { console.error(e); setTrendingSeries([]); });
+    api.trending('anime')
+      .then(setTrendingAnime)
+      .catch(e => { console.error(e); setTrendingAnime([]); });
     // /discover/featured returns landscape backdrops — used for the hero art.
     api.featured(undefined, 4)
       .then(setFeatured)
@@ -182,12 +193,20 @@ export default function HomePage() {
         />
       )}
 
-      {trending?.length > 0 && (
+      {trendingSeries?.length > 0 && (
         <PosterRail
-          title={t('home.trending')}
+          title={t('home.trendingSeries')}
           subtitle={t('home.trendingSub')}
-          series={trending}
-          linkTo="/discover"
+          series={trendingSeries}
+          linkTo="/discover?type=tv_series"
+        />
+      )}
+
+      {trendingAnime?.length > 0 && (
+        <PosterRail
+          title={t('home.trendingAnime')}
+          series={trendingAnime}
+          linkTo="/discover?type=anime"
         />
       )}
 

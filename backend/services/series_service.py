@@ -33,6 +33,20 @@ def _connect() -> Tuple[MongoDBManager, None] | Tuple[None, str]:
         return None, str(exc)
 
 
+# BingeFinder is deliberately a web-series + anime product. The catalog
+# snapshot still carries legacy `movie` rows from earlier sweeps, so they are
+# excluded from every product-facing read (search, suggest, discovery rails,
+# filter options) instead of being exposed in the UI. No schema change or
+# migration: unsupported rows are simply skipped.
+SUPPORTED_CONTENT_TYPES = ("tv_series", "anime")
+_UNSUPPORTED_CONTENT_TYPE = "movie"
+
+
+def is_supported_content_type(value: Optional[str]) -> bool:
+    """Legacy untagged documents count as web series."""
+    return (value or "tv_series") in SUPPORTED_CONTENT_TYPES
+
+
 # Fields every catalog consumer below needs, projected out of Mongo so a
 # search/filter/discovery request never transfers full documents (overviews,
 # casts, provider blobs) just to rank titles. Kept intentionally slim.
@@ -87,6 +101,7 @@ def get_catalog_snapshot() -> Tuple[List[Dict[str, Any]], Optional[str]]:
             docs = [
                 dict(d) for d in manager.series.find({}, _CATALOG_PROJECTION)
                 if d.get("series_id") is not None
+                and is_supported_content_type(d.get("content_type"))
             ]
             _catalog_snapshot_state["data"] = docs
             _catalog_snapshot_state["ts"] = time.time()
@@ -127,8 +142,15 @@ def get_search_candidates(
             if ct == "tv_series":
                 # Legacy untagged docs count as tv_series (see search_series).
                 filt["content_type"] = {"$in": ["tv_series", None]}
-            else:
+            elif ct in SUPPORTED_CONTENT_TYPES:
                 filt["content_type"] = ct
+            else:
+                # Unsupported type (e.g. movie): match nothing rather than
+                # leaking content BingeFinder does not carry.
+                return [], None
+        else:
+            # Default browse/search covers the supported categories only.
+            filt["content_type"] = {"$in": ["tv_series", "anime", None]}
         if min_rating and min_rating > 0:
             filt["rating"] = {"$gte": float(min_rating)}
         if language:
@@ -178,6 +200,10 @@ def get_all_series() -> Tuple[List[Dict[str, Any]], Optional[str]]:
         docs = manager.get_all_series()
         result = []
         for d in docs:
+            # Skip unsupported (e.g. legacy movie) rows so discovery rails and
+            # any other full-catalog consumer stay web series + anime only.
+            if not is_supported_content_type(d.get("content_type")):
+                continue
             doc = dict(d)
             if "_id" in doc:
                 doc["_id"] = str(doc["_id"])
@@ -305,6 +331,8 @@ def search_series(
             continue
         if content_type and doc.get("content_type", "tv_series") != content_type:
             continue
+        if not is_supported_content_type(doc.get("content_type")):
+            continue
         results.append(doc)
 
     if query:
@@ -364,5 +392,5 @@ def get_filter_options(docs: List[Dict[str, Any]]) -> Dict[str, List]:
         "languages": sorted(languages),
         "statuses": sorted(statuses),
         "years": sorted(years, reverse=True),
-        "content_types": sorted(ct for ct in content_types if ct in ("movie", "tv_series", "anime")),
+        "content_types": sorted(ct for ct in content_types if ct in SUPPORTED_CONTENT_TYPES),
     }

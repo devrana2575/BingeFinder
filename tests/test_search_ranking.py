@@ -85,13 +85,18 @@ def test_content_type_filter_isolates_movies_and_mixed_types():
          "genres": ["Animation"], "rating": 8.4, "language": "Japanese",
          "content_type": "anime"},
     ]
-    movies = search_series(docs, content_type="movie")
-    assert [d["series_id"] for d in movies] == [6]
+    # BingeFinder only carries web series + anime, so a movie filter returns
+    # nothing rather than surfacing unsupported content.
+    assert search_series(docs, content_type="movie") == []
     anime = search_series(docs, content_type="anime")
     assert [d["series_id"] for d in anime] == [7]
     series = search_series(docs, content_type="tv_series")
     assert 1 in [d["series_id"] for d in series]
     assert 6 not in [d["series_id"] for d in series]
+    # Unfiltered search never leaks the movie row either.
+    unfiltered = [d["series_id"] for d in search_series(docs)]
+    assert 6 not in unfiltered
+    assert 7 in unfiltered
 
 
 def test_content_type_filter_coexists_with_query_ranking():

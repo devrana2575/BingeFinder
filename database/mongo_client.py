@@ -190,14 +190,31 @@ class MongoDBManager:
             logger.warning("Failed to inspect 'search_text' index: %s", exc)
             return
 
-        want = [("name", "text"), ("original_name", "text")]
-        if existing and existing.get("key") == want and existing.get("default_language") == "none":
-            return
+        # NOTE: MongoDB reports a compound text index's key as internal
+        # [("_fts", "text"), ("_ftsx", 1)] entries, NOT as the
+        # [("name", "text"), ("original_name", "text")] spec used to create
+        # it. Comparing the key directly therefore never matched, so this
+        # method dropped and rebuilt the index on every MongoDBManager
+        # instantiation — i.e. on every request, costing seconds each time.
+        # The indexed fields live in "weights" instead, so validate against
+        # that (plus the language settings we require).
+        want_weights = {"name": 1, "original_name": 1}
+        if existing:
+            key = existing.get("key") or []
+            is_text = bool(key) and key[0] == ("_fts", "text")
+            weights = dict(existing.get("weights") or {})
+            if (
+                is_text
+                and weights == want_weights
+                and existing.get("default_language") == "none"
+                and existing.get("language_override") == "bf_lang_override"
+            ):
+                return
         try:
             if existing:
                 self.series.drop_index("search_text")
             self.series.create_index(
-                want,
+                [("name", "text"), ("original_name", "text")],
                 name="search_text",
                 default_language="none",
                 language_override="bf_lang_override",

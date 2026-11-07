@@ -8,6 +8,7 @@ Reuses existing Python modules directly — no duplicated business logic.
 """
 
 import sys
+import threading
 from pathlib import Path
 
 # Ensure project root is importable
@@ -31,13 +32,31 @@ async def lifespan(app: FastAPI):
     logger = get_logger("backend.main")
     logger.info("BingeFinder API starting up...")
 
-    # Pre-load the recommendation model into memory
-    try:
-        from recommender.recommend import load_model
-        load_model()
-        logger.info("Recommendation model loaded.")
-    except Exception as exc:
-        logger.warning("Recommendation model not available: %s", exc)
+    # Pre-load the recommendation model in the background so the API starts
+    # accepting requests immediately; deserializing the artifact can take
+    # tens of seconds and used to block the whole server startup.
+    def _warm_model() -> None:
+        try:
+            from recommender.recommend import load_model
+            load_model()
+            logger.info("Recommendation model loaded.")
+        except Exception as exc:
+            logger.warning("Recommendation model not available: %s", exc)
+
+    threading.Thread(target=_warm_model, name="model-warmup", daemon=True).start()
+
+    # Warm the shared catalog snapshot too: the first discovery/search request
+    # would otherwise pay the one-off full-collection read (a couple of
+    # seconds at ~190k documents).
+    def _warm_catalog() -> None:
+        try:
+            from backend.services import series_service
+            series_service.get_catalog_snapshot()
+            logger.info("Catalog snapshot warmed.")
+        except Exception as exc:
+            logger.warning("Catalog snapshot warm-up failed: %s", exc)
+
+    threading.Thread(target=_warm_catalog, name="catalog-warmup", daemon=True).start()
 
     # Warm the TMDb reachability breaker so TMDb-dependent routes never
     # stall the first request on a connect timeout when the API is down.

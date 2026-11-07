@@ -25,7 +25,7 @@ export default function Layout() {
         Skip to main content
       </a>
 
-      <div className="hidden lg:block flex-shrink-0">
+      <div className="hidden lg:block fixed inset-y-0 left-0 z-30 w-60">
         <Sidebar />
       </div>
 
@@ -38,7 +38,7 @@ export default function Layout() {
         </div>
       )}
 
-      <main id="main-content" className="flex-1 min-w-0">
+      <main id="main-content" className="flex-1 min-w-0 lg:ml-60">
         <div className="lg:hidden sticky top-0 z-30 bg-bg/90 backdrop-blur-sm border-b border-border px-4 py-3 flex items-center gap-3">
           <button
             onClick={() => setMobileOpen(true)}

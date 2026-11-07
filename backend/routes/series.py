@@ -86,10 +86,6 @@ def search(
     limit: int = Query(50, ge=1, le=200, description="Max results to return in this page"),
     offset: int = Query(0, ge=0, description="Skip this many results (for pagination)"),
 ):
-    docs, err = series_service.get_all_series()
-    if err:
-        return SeriesSearchResult(query=q, total_results=0, results=[])
-
     genres = [genre] if genre else None
     if q.strip():
         docs, err = series_service.get_search_candidates(

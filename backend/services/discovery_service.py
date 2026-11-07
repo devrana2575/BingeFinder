@@ -209,8 +209,21 @@ def get_free_to_watch(docs: List[Dict], limit: int = 6, region: Optional[str] = 
     rated = [d for d in docs if isinstance(d.get("rating"), (int, float)) and d["rating"] >= 6.0]
     if not rated:
         rated = [d for d in docs if isinstance(d.get("rating"), (int, float))]
-    sample_size = min(30, len(rated))
-    sampled = random.sample(rated, sample_size) if sample_size > 0 else []
+    # Deterministic sample: the provider cache is keyed by series, so picking
+    # a different random 30 every request guaranteed a fresh batch of slow
+    # TMDb lookups. A stable shuffle lets warm caches (and the rail cache in
+    # the route) actually hit.
+    ordered = sorted(
+        rated,
+        key=lambda d: (
+            d.get("rating") if isinstance(d.get("rating"), (int, float)) else 0.0,
+            d.get("weight") if isinstance(d.get("weight"), (int, float)) else 0.0,
+        ),
+        reverse=True,
+    )
+    pool = ordered[:80]
+    sample_size = min(24, len(pool))
+    sampled = random.Random(0).sample(pool, sample_size) if sample_size > 0 else []
 
     free_series = []
 

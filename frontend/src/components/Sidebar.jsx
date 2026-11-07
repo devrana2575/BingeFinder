@@ -38,7 +38,7 @@ export default function Sidebar({ onNavigate }) {
   };
 
   return (
-    <aside className="w-60 h-screen bg-surface/70 backdrop-blur border-r border-border p-4 flex flex-col sticky top-0">
+    <aside className="w-60 h-full bg-bg border-r border-border p-4 flex flex-col overflow-y-auto">
       <Link to="/" onClick={onNavigate} className="mb-6 block">
         <span className="text-lg font-bold tracking-tight text-text" style={{ fontFamily: 'Sora, sans-serif' }}>
           Binge<span className="text-accent">Finder</span>

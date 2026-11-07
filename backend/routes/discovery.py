@@ -6,6 +6,7 @@ GET /discover, /tonights-binge, /trending, /hidden-gems, /free-tonight,
 """
 
 from typing import Any, Dict, List, Optional, Set
+import time
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
@@ -19,6 +20,11 @@ router = APIRouter()
 
 # Per-session seen IDs (in-memory, resets on server restart — acceptable)
 _seen_ids: Set[int] = set()
+
+# Free Tonight is TMDb-bound (one lookup per sampled title). Cache the
+# resolved rail briefly so a homepage visit does not repeat the whole batch.
+_FREE_TONIGHT_TTL_SECONDS = 600.0
+_free_tonight_cache: Dict[Any, Any] = {}
 
 
 def _doc_to_free_providers(raw: Any) -> List[FreeProvider]:
@@ -123,7 +129,9 @@ def _build_surprise_signals(user_id: Optional[str]) -> Dict[str, Any]:
 
 
 def _load_catalog():
-    docs, err = series_service.get_all_series()
+    # Use the shared, TTL-cached projected snapshot: a full unprojected
+    # collection read per rail made the homepage fire 7-10s requests.
+    docs, err = series_service.get_catalog_snapshot()
     if err:
         raise HTTPException(status_code=503, detail=err)
     return docs
@@ -188,7 +196,7 @@ def featured(
     pick for the hero banner; a per-type cap keeps the rest a varied mix of
     movies, series and anime.
     """
-    docs, err = series_service.get_all_series()
+    docs, err = series_service.get_catalog_snapshot()
     if err:
         raise HTTPException(status_code=503, detail=err)
 
@@ -232,8 +240,16 @@ def featured(
 
 @router.get("/free-tonight", response_model=List[SeriesSummary])
 def free_tonight(region: Optional[str] = None, content_type: Optional[str] = None):
+    cache_key = ((region or "").upper(), content_type or "")
+    cached = _free_tonight_cache.get(cache_key)
+    now = time.time()
+    if cached and now - cached[0] < _FREE_TONIGHT_TTL_SECONDS:
+        return [_doc_to_summary(d) for d in cached[1]]
+
     docs = _rail(content_type)
     free = discovery_service.get_free_to_watch(docs, limit=6, region=region)
+    if free:
+        _free_tonight_cache[cache_key] = (now, free)
     return [_doc_to_summary(d) for d in free]
 
 
@@ -257,7 +273,7 @@ def vibes():
 
 @router.get("/vibes/{vibe_key}", response_model=List[SeriesSummary])
 def vibe_filtered(vibe_key: str):
-    docs, err = series_service.get_all_series()
+    docs, err = series_service.get_catalog_snapshot()
     if err:
         raise HTTPException(status_code=503, detail=err)
     filtered = discovery_service.get_vibe_filtered(docs, vibe_key)

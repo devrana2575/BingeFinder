@@ -19,6 +19,7 @@ recommender/build_model.py.
 
 import os as _os
 import sys
+import threading
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -113,6 +114,9 @@ _MAX_PER_NETWORK = 2
 # Kept in-process so repeated calls don't re-read the artifact file from disk.
 _model_cache: Optional[Dict[str, Any]] = None
 _model_cache_path: Optional[Path] = None
+# Guards artifact loading so a background warm-up and an incoming request
+# can't deserialize the (large) model twice concurrently.
+_model_load_lock = threading.Lock()
 
 
 def load_model(model_path: Optional[Path] = None, force_reload: bool = False) -> Dict[str, Any]:
@@ -142,15 +146,19 @@ def load_model(model_path: Optional[Path] = None, force_reload: bool = False) ->
             f"Build it first with `python -m recommender.build_model`."
         )
 
-    try:
-        bundle = joblib.load(path)
-    except Exception as exc:
-        logger.error("Failed to load recommendation model from %s: %s", path, exc)
-        raise ModelNotBuiltError(f"Failed to load recommendation model from {path}: {exc}") from exc
+    with _model_load_lock:
+        # Re-check: another thread may have finished loading while we waited.
+        if not force_reload and _model_cache is not None and _model_cache_path == path:
+            return _model_cache
+        try:
+            bundle = joblib.load(path)
+        except Exception as exc:
+            logger.error("Failed to load recommendation model from %s: %s", path, exc)
+            raise ModelNotBuiltError(f"Failed to load recommendation model from {path}: {exc}") from exc
 
-    _model_cache = bundle
-    _model_cache_path = path
-    return bundle
+        _model_cache = bundle
+        _model_cache_path = path
+        return bundle
 
 
 def _genre_jaccard(genres_a: set, genres_b: set) -> float:

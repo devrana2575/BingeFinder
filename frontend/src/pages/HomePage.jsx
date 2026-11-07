@@ -68,9 +68,9 @@ export default function HomePage() {
   const [trendingSeries, setTrendingSeries] = useState(null);
   const [trendingAnime, setTrendingAnime] = useState(null);
   const [gems, setGems] = useState(null);
+  const [catalogTotal, setCatalogTotal] = useState(null);
   const [recs, setRecs] = useState(null);
   const [freeTonight, setFreeTonight] = useState(null);
-  const [featured, setFeatured] = useState(null);
   const [newNoteworthy, setNewNoteworthy] = useState(null);
   const [becauseWatched, setBecauseWatched] = useState(null);
   const [watchedName, setWatchedName] = useState(null);
@@ -84,7 +84,6 @@ export default function HomePage() {
     setGems(null);
     setRecs(null);
     setFreeTonight(null);
-    setFeatured(null);
     setNewNoteworthy(null);
     setBecauseWatched(null);
     setWatchedName(null);
@@ -99,10 +98,8 @@ export default function HomePage() {
     api.trending('anime')
       .then(setTrendingAnime)
       .catch(e => { console.error(e); setTrendingAnime([]); });
-    // /discover/featured returns landscape backdrops — used for the hero art.
-    api.featured(undefined, 4)
-      .then(setFeatured)
-      .catch(e => { console.error(e); setFeatured([]); });
+    // /discover/featured is no longer needed for hero artwork — the hero is
+    // artwork-free now, which also removes one full-catalog request.
     api.hiddenGems()
       .then(setGems)
       .catch(e => { console.error(e); setGems([]); });
@@ -132,6 +129,12 @@ export default function HomePage() {
 
   useEffect(load, [load]);
 
+  useEffect(() => {
+    api.catalogCount()
+      .then(d => setCatalogTotal(d?.total ?? null))
+      .catch(() => {});
+  }, []);
+
   const guestPicks = useMemo(() => {
     if (isAuth || !trending?.length) return null;
     let prefs = {};
@@ -149,7 +152,7 @@ export default function HomePage() {
   }, [isAuth, trending]);
 
   const nothingLoaded = trending === null && gems === null && freeTonight === null &&
-    newNoteworthy === null && featured === null;
+    newNoteworthy === null;
 
   if (nothingLoaded) {
     return (
@@ -166,18 +169,16 @@ export default function HomePage() {
 
   if (error) return <ErrorState message={error} onRetry={load} />;
 
-  const count = (featured?.length || 0) + (trending?.length || 0);
   const hasRecs = isAuth && recs?.length > 0;
 
   return (
     <div>
       <Hero
-        backdrops={(featured || []).map(f => f.image)}
         brand={t('hero.brand')}
         title={t('hero.title')}
         tagline={t('hero.tagline')}
         subtitle={t('hero.subtitle')}
-        count={count > 0 ? count : null}
+        count={catalogTotal}
       >
         <HeroActions />
         <VibeChips />

@@ -108,7 +108,6 @@ export default function TypeLandingPage({ type }) {
   return (
     <div>
       <Hero
-        backdrops={(popular || []).map(f => f.image)}
         brand={t(labelKey)}
         title={t(subKey)}
         tagline={t('hero.tagline')}

@@ -8,7 +8,7 @@ import re
 import threading
 import time
 from difflib import SequenceMatcher
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Set, Tuple
 
 from pymongo.errors import PyMongoError
 
@@ -34,12 +34,14 @@ def _connect() -> Tuple[MongoDBManager, None] | Tuple[None, str]:
 
 
 # BingeFinder is deliberately a web-series + anime product. The catalog
-# snapshot still carries legacy `movie` rows from earlier sweeps, so they are
-# excluded from every product-facing read (search, suggest, discovery rails,
-# filter options) instead of being exposed in the UI. No schema change or
-# migration: unsupported rows are simply skipped.
+# snapshot still carries legacy `movie` rows and `broadcast_tv` rows moved out
+# of the old broad TV catalog, so they are excluded from every product-facing
+# read (search, suggest, discovery rails, filter options) instead of being
+# exposed in the UI. No schema change or migration: unsupported rows are simply
+# skipped. (`tv_series` is the internal bucket; the UI labels it "Web Series".)
 SUPPORTED_CONTENT_TYPES = ("tv_series", "anime")
 _UNSUPPORTED_CONTENT_TYPE = "movie"
+_HIDDEN_CONTENT_TYPE = "broadcast_tv"
 
 
 def is_supported_content_type(value: Optional[str]) -> bool:
@@ -240,6 +242,10 @@ def get_series_by_id(series_id: int) -> Tuple[Optional[Dict[str, Any]], Optional
     try:
         doc = manager.get_series_by_id(series_id)
         if doc:
+            # Direct links/bookmarks to removed broadcast-TV rows must 404
+            # exactly like any other unsupported title.
+            if not is_supported_content_type(doc.get("content_type")):
+                return None, f"No series found with id {series_id}."
             doc = dict(doc)
             if "_id" in doc:
                 doc["_id"] = str(doc["_id"])
@@ -250,13 +256,24 @@ def get_series_by_id(series_id: int) -> Tuple[Optional[Dict[str, Any]], Optional
 
 
 def get_series_count() -> int:
+    """Count only product-facing titles (web series + anime), never hidden TV."""
     manager, err = _connect()
     if err:
         return 0
     try:
-        return manager.get_series_count()
+        return manager.series.count_documents(
+            {"content_type": {"$in": list(SUPPORTED_CONTENT_TYPES)}}
+        )
     finally:
         manager.close()
+
+
+def get_supported_series_ids() -> Tuple[Set[int], Optional[str]]:
+    """IDs visible to product reads, derived from the cached catalog snapshot."""
+    docs, err = get_catalog_snapshot()
+    if err:
+        return set(), err
+    return {d.get("series_id") for d in docs if d.get("series_id") is not None}, None
 
 
 def search_series(

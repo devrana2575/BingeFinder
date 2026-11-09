@@ -112,7 +112,7 @@ const LOCALE_EN = {
   'home.popular': 'Popular',
   'home.freeTonightEmpty': 'No verified free streaming option currently available in your region.',
 
-  'card.typeSeries': 'TV Series',
+  'card.typeSeries': 'Web Series',
   'card.typeAnime': 'Anime',
   'card.recommended': 'Recommended',
   'card.strongMatch': 'Strong match',

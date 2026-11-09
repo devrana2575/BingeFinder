@@ -71,13 +71,27 @@ def get_recommendations_for_series(
 
     try:
         # RELEVANCE_FLOOR == MIN_RECOMMENDATION_SCORE (absolute, distribution-derived).
-        return get_recommendations(series_id, top_n=top_n, min_relevance=RELEVANCE_FLOOR), None
+        recommendations = get_recommendations(
+            series_id, top_n=top_n, min_relevance=RELEVANCE_FLOOR
+        )
     except ModelNotBuiltError:
         return [], "The recommendation model hasn't been built yet. Run `python -m recommender.build_model` first."
     except SeriesNotFoundError:
         return [], "This series isn't in the recommendation model yet."
     except RecommenderError as exc:
         return [], f"Could not generate recommendations: {exc}"
+
+    # The saved model can still contain legacy broadcast-TV rows. Never leak
+    # them back into the UI: keep only titles that are in the current catalog.
+    try:
+        from backend.services.series_service import get_supported_series_ids
+
+        visible_ids, _ = get_supported_series_ids()
+        if visible_ids:
+            recommendations = [r for r in recommendations if r.get("series_id") in visible_ids]
+    except Exception:
+        pass
+    return recommendations, None
 
 
 def get_personalized_recommendations(
@@ -213,6 +227,19 @@ def get_personalized_recommendations(
             for sid in series_ids
         ])
         mask = mask & ct_mask
+
+    # The model artifact predates the web-series sweep and may still contain
+    # broadcast-TV rows. Restrict candidates to titles that remain visible in
+    # the current catalog so hidden shows can never resurface here.
+    try:
+        from backend.services.series_service import get_supported_series_ids
+
+        visible_ids, _ = get_supported_series_ids()
+        if visible_ids:
+            mask = mask & np.array([sid in visible_ids for sid in series_ids])
+    except Exception:
+        pass
+
     candidate_rows = all_rows[mask]
 
     if len(candidate_rows) == 0:

@@ -152,6 +152,13 @@ def build_recommendation_model(save_path: Optional[Path] = None) -> Dict[str, An
             skipped += 1
             continue
 
+        # Product scope: web series + anime only. Legacy movie and hidden
+        # broadcast-TV rows must never enter the recommendation model
+        # (otherwise they can resurface in For You after a rebuild).
+        if (doc.get("content_type") or "tv_series") not in ("tv_series", "anime"):
+            skipped += 1
+            continue
+
         soup = build_content_soup(doc)
         if not soup:
             skipped += 1

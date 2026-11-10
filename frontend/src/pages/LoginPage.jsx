@@ -1,11 +1,14 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { t } from '../i18n';
+import { getReturnPath } from '../utils/navigation';
 
 export default function LoginPage() {
   const { login } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const from = location.state?.from;
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPw, setShowPw] = useState(false);
@@ -18,7 +21,7 @@ export default function LoginPage() {
     setLoading(true);
     try {
       await login(email, password);
-      navigate('/');
+      navigate(getReturnPath(from), { replace: true });
     } catch (err) {
       setError(err.message);
     } finally {
@@ -27,9 +30,17 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="max-w-sm mx-auto mt-16">
+    <div className="w-full">
       <h1 className="text-xl font-bold text-text mb-1 text-center">Welcome back</h1>
-      <p className="text-sm text-text-muted text-center mb-6">Log in to your account</p>
+      <p className="text-sm text-text-muted text-center mb-6">
+        {from ? 'Log in to explore the catalog and your picks.' : 'Log in to your account'}
+      </p>
+
+      {from && (
+        <div className="mb-4 p-3 rounded-lg bg-accent/10 border border-accent/20 text-xs text-accent-light text-center">
+          Catalog discovery is members-only. Log in to continue.
+        </div>
+      )}
 
       {error && (
         <div className="mb-4 p-3 rounded-lg bg-danger/10 border border-danger/20 text-sm text-danger text-center">
@@ -63,7 +74,7 @@ export default function LoginPage() {
       </form>
 
       <p className="text-center text-sm text-text-muted mt-6">
-        Don't have an account? <Link to="/signup" className="text-accent hover:underline">{t('auth.signup')}</Link>
+        Don't have an account? <Link to="/signup" state={location.state} className="text-accent hover:underline">{t('auth.signup')}</Link>
       </p>
     </div>
   );

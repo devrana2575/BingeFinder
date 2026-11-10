@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, JSONResponse
@@ -26,6 +26,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from config import APP_ENV, get_allowed_hosts, get_mongodb_uri, is_production
+from backend.dependencies import require_auth
 from backend.middleware.cors import get_allowed_origins
 from backend.middleware.observability import RequestContextMiddleware
 from backend.middleware.security_headers import SecurityHeadersMiddleware
@@ -131,15 +132,18 @@ app.add_middleware(SecurityHeadersMiddleware)
 # Request correlation + access logs (outermost so every response gets an ID).
 app.add_middleware(RequestContextMiddleware)
 
-# Routers
+# Routers. Everything that exposes catalog/discovery data is members-only;
+# only auth, regions (needed by the login shell), and health probes stay public.
+_auth_required = [Depends(require_auth)]
+
 app.include_router(auth.router, prefix="/api/auth", tags=["auth"])
-app.include_router(series.router, prefix="/api/series", tags=["series"])
-app.include_router(recommendations.router, prefix="/api", tags=["recommendations"])
-app.include_router(discovery.router, prefix="/api/discover", tags=["discovery"])
-app.include_router(watch_providers.router, prefix="/api/series", tags=["watch-providers"])
-app.include_router(watch_providers.provider_list_router, prefix="/api/watch-providers", tags=["watch-providers"])
+app.include_router(series.router, prefix="/api/series", tags=["series"], dependencies=_auth_required)
+app.include_router(recommendations.router, prefix="/api", tags=["recommendations"], dependencies=_auth_required)
+app.include_router(discovery.router, prefix="/api/discover", tags=["discovery"], dependencies=_auth_required)
+app.include_router(watch_providers.router, prefix="/api/series", tags=["watch-providers"], dependencies=_auth_required)
+app.include_router(watch_providers.provider_list_router, prefix="/api/watch-providers", tags=["watch-providers"], dependencies=_auth_required)
 app.include_router(users.router, prefix="/api/user", tags=["user"])
-app.include_router(events.router, prefix="/api/events", tags=["events"])
+app.include_router(events.router, prefix="/api/events", tags=["events"], dependencies=_auth_required)
 app.include_router(regions.router, prefix="/api", tags=["regions"])
 
 
@@ -180,6 +184,17 @@ def readiness_check():
     finally:
         if client is not None:
             client.close()
+
+
+# Hide the schema/docs URLs outright in production. Without this, the SPA
+# catch-all below would serve index.html with a 200 for /docs and
+# /openapi.json, which looks like a live API schema to crawlers and clients.
+if not _docs_enabled:
+    @app.get("/docs", include_in_schema=False)
+    @app.get("/redoc", include_in_schema=False)
+    @app.get("/openapi.json", include_in_schema=False)
+    def docs_disabled():
+        raise HTTPException(status_code=404, detail="Not found")
 
 
 # ---------------------------------------------------------------------------

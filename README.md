@@ -6,6 +6,7 @@ A data-science-powered web-series discovery and recommendation platform that hel
 
 ## Features
 
+- **Members-Only Discovery** — Catalog, search, recommendations, and watch providers require an account; guests are sent to login and returned to the page they tried to open
 - **Smart Search** — Search by title with exact-match priority; ambiguous titles (e.g. "Money Heist") show multiple candidates for the user to pick
 - **Content-Based Recommendations** — TF-IDF + cosine similarity + semantic embeddings on summary, genres, cast, and network
 - **Personalized Recommendations** — Weighted preference vector from **Like / Love / Not For Me** reactions, watchlist, and recently-viewed history, reranked with an adaptive LinUCB contextual bandit

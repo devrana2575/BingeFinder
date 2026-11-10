@@ -51,36 +51,38 @@ export default function Sidebar({ onNavigate }) {
         </span>
       </Link>
 
-      <NavGroup label={t('nav.discoverGroup')}>
-        {nav('/', t('nav.home'))}
-        {nav('/series', t('nav.series'))}
-        {nav('/anime', t('nav.anime'))}
-        {nav('/discover', t('nav.discover'))}
-      </NavGroup>
-
-      <Link
-        to="/surprise"
-        onClick={onNavigate}
-        aria-current={isActive('/surprise') ? 'page' : undefined}
-        className={`mb-5 flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-bold text-bg transition-all duration-200 ${
-          isActive('/surprise')
-            ? 'bg-accent-light shadow-[0_8px_24px_-8px_rgba(91,157,255,0.8)]'
-            : 'bg-gradient-to-r from-accent to-accent-light hover:brightness-110 hover:shadow-[0_8px_24px_-8px_rgba(91,157,255,0.7)]'
-        }`}
-      >
-        <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-          <path d="M12 2l1.9 6.1L20 10l-6.1 1.9L12 18l-1.9-6.1L4 10l6.1-1.9L12 2zm7 12l.9 2.6L22.5 17.5l-2.6.9L19 21l-.9-2.6-2.6-.9 2.6-.9L19 14zM5 15l.7 2.1L7.8 18l-2.1.7L5 21l-.7-2.3L2.2 18l2.1-.9L5 15z" />
-        </svg>
-        {t('nav.surprise')}
-      </Link>
-
       {isAuth && (
-        <NavGroup label={t('nav.libraryGroup')}>
-          {nav('/for-you', t('nav.forYou'))}
-          {nav('/watchlist', t('nav.watchlist'))}
-          {nav('/liked', t('nav.liked'))}
-          {nav('/recently-viewed', t('nav.recentlyViewed'))}
-        </NavGroup>
+        <>
+          <NavGroup label={t('nav.discoverGroup')}>
+            {nav('/', t('nav.home'))}
+            {nav('/series', t('nav.series'))}
+            {nav('/anime', t('nav.anime'))}
+            {nav('/discover', t('nav.discover'))}
+          </NavGroup>
+
+          <Link
+            to="/surprise"
+            onClick={onNavigate}
+            aria-current={isActive('/surprise') ? 'page' : undefined}
+            className={`mb-5 flex items-center justify-center gap-2 rounded-xl px-3 py-2.5 text-sm font-bold text-bg transition-all duration-200 ${
+              isActive('/surprise')
+                ? 'bg-accent-light shadow-[0_8px_24px_-8px_rgba(91,157,255,0.8)]'
+                : 'bg-gradient-to-r from-accent to-accent-light hover:brightness-110 hover:shadow-[0_8px_24px_-8px_rgba(91,157,255,0.7)]'
+            }`}
+          >
+            <svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+              <path d="M12 2l1.9 6.1L20 10l-6.1 1.9L12 18l-1.9-6.1L4 10l6.1-1.9L12 2zm7 12l.9 2.6L22.5 17.5l-2.6.9L19 21l-.9-2.6-2.6-.9 2.6-.9L19 14zM5 15l.7 2.1L7.8 18l-2.1.7L5 21l-.7-2.3L2.2 18l2.1-.9L5 15z" />
+            </svg>
+            {t('nav.surprise')}
+          </Link>
+
+          <NavGroup label={t('nav.libraryGroup')}>
+            {nav('/for-you', t('nav.forYou'))}
+            {nav('/watchlist', t('nav.watchlist'))}
+            {nav('/liked', t('nav.liked'))}
+            {nav('/recently-viewed', t('nav.recentlyViewed'))}
+          </NavGroup>
+        </>
       )}
 
       <div className="mt-auto pt-4 border-t border-border">

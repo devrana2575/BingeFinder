@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { t } from '../i18n';
 
 export default function SignupPage() {
   const { signup } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -37,7 +38,7 @@ export default function SignupPage() {
   };
 
   return (
-    <div className="max-w-sm mx-auto mt-16">
+    <div className="w-full">
       <h1 className="text-xl font-bold text-text mb-1 text-center">Create an account</h1>
       <p className="text-sm text-text-muted text-center mb-6">Start finding your next binge</p>
 
@@ -85,7 +86,7 @@ export default function SignupPage() {
       </form>
 
       <p className="text-center text-sm text-text-muted mt-6">
-        Already have an account? <Link to="/login" className="text-accent hover:underline">{t('auth.login')}</Link>
+        Already have an account? <Link to="/login" state={location.state} className="text-accent hover:underline">{t('auth.login')}</Link>
       </p>
     </div>
   );

@@ -12,6 +12,9 @@ and a reverse proxy.
 ## What is included
 
 - Single-origin deployment: FastAPI serves the built React SPA **and** `/api`
+- Login-gated exploration: the SPA redirects guests to `/login`, and catalog,
+  discovery, recommendation, watch-provider, event, and library APIs require a
+  valid JWT
 - Native `systemd` unit template and Caddy reverse-proxy template (`deploy/`)
 - Liveness (`/api/health`) and readiness (`/api/ready`, MongoDB ping) probes
 - Production hardening: required `JWT_SECRET` and `ALLOWED_HOSTS`, hidden API
@@ -39,6 +42,17 @@ MongoDB (catalog, users, interactions)
   |
   +--> recommendation_model.joblib (TF-IDF + sentence embeddings)
 ```
+
+## Authentication model
+
+- **Public:** `/api/auth/login`, `/api/auth/signup`, `/api/regions`,
+  `/api/health`, `/api/ready`
+- **Protected:** catalog, search, discovery, recommendations, watch providers,
+  events, and all user library/settings endpoints
+- Guests are redirected by the SPA to `/login`; after login they return to the
+  attempted route.
+- This is server-side enforcement, not just hidden UI: direct API calls without
+  a valid Bearer token receive `401 Authentication required`.
 
 ## 1. Server deployment (recommended)
 

@@ -1,0 +1,7 @@
+# BingeFinder — public discovery pages only. The API is not crawlable.
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /login
+Disallow: /signup
+Disallow: /onboarding

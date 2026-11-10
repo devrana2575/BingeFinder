@@ -2,15 +2,65 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🎬</text></svg>" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>BingeFinder</title>
+    <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#0A0A0F" />
+
+    <title>BingeFinder — Find your next binge</title>
+    <meta
+      name="description"
+      content="Discover web series and anime worth your time. Personalized recommendations, streaming availability, and a watchlist that travels with you."
+    />
+    <meta name="application-name" content="BingeFinder" />
+    <meta name="robots" content="index, follow" />
+
+    <link rel="canonical" href="https://bingefinder.app/" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <link rel="apple-touch-icon" href="/icon-192.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="BingeFinder" />
+
+    <!-- Open Graph / social sharing -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="BingeFinder" />
+    <meta property="og:title" content="BingeFinder — Find your next binge" />
+    <meta
+      property="og:description"
+      content="Discover web series and anime worth your time. Personalized recommendations, streaming availability, and a watchlist that travels with you."
+    />
+    <meta property="og:url" content="https://bingefinder.app/" />
+    <meta property="og:image" content="https://bingefinder.app/og-image.png" />
+    <meta property="og:image:type" content="image/png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="BingeFinder — Find your next binge" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="BingeFinder — Find your next binge" />
+    <meta
+      name="twitter:description"
+      content="Discover web series and anime worth your time. Personalized recommendations, streaming availability, and a watchlist that travels with you."
+    />
+    <meta name="twitter:image" content="https://bingefinder.app/og-image.png" />
+    <meta name="twitter:image:alt" content="BingeFinder — Find your next binge" />
+
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@400;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="preconnect" href="https://image.tmdb.org" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Sora:wght@400;600;700;800&display=swap"
+      rel="stylesheet"
+    />
   </head>
   <body>
     <div id="root"></div>
+    <noscript>
+      <div style="padding: 2rem; font-family: sans-serif; color: #f0f0f2; background: #0a0a0f; min-height: 100vh">
+        <h1>BingeFinder</h1>
+        <p>BingeFinder needs JavaScript enabled to find your next binge.</p>
+      </div>
+    </noscript>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

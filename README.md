@@ -191,6 +191,40 @@ The SPA runs at `http://localhost:5173` and proxies API calls to the backend.
 
 ---
 
+## Production Deployment
+
+The production stack is a single origin: FastAPI serves the built SPA and the
+API, with MongoDB as the only stateful dependency.
+
+```bash
+# 1. Build the SPA once (and after frontend changes)
+cd frontend && npm ci && npm run build && cd ..
+
+# 2. Create the Python environment
+python3 -m venv .venv && . .venv/bin/activate   # Windows: .venv\Scripts\Activate.ps1
+pip install -r requirements.txt
+
+# 3. Configure .env (APP_ENV=production, JWT_SECRET, ALLOWED_HOSTS, TMDb token)
+cp .env.example .env
+
+# 4. Seed the catalog and build the model (first run)
+python -m backend.services.web_series_ingest --pages 3
+python -m recommender.build_model
+
+# 5. Run behind a TLS reverse proxy
+uvicorn backend.main:app --host 127.0.0.1 --port 8000 --workers 2 --proxy-headers
+```
+
+`APP_ENV=production` requires `JWT_SECRET` and `ALLOWED_HOSTS`, hides `/docs`,
+and enables HSTS, CSP, `TrustedHost`, and secure cache headers. Health probes
+are available at `/api/health` (liveness) and `/api/ready` (MongoDB readiness).
+
+See **[DEPLOYMENT.md](DEPLOYMENT.md)** for the full server guide, `systemd` and
+reverse-proxy templates (`deploy/`), environment variables, catalog seeding,
+scaling, backups, and the security checklist.
+
+---
+
 ## Testing
 
 ```bash
@@ -227,6 +261,13 @@ The catalog grows via two idempotent, upsert-only ingesters (data is never wiped
   python -m backend.services.catalog_ingest --pages 3 --enrich
   ```
 
+- **Web-series sweep** (needs `TMDB_API_READ_ACCESS_TOKEN`): re-checks candidates
+  and keeps the product catalog to web series + anime only.
+
+  ```bash
+  python -m backend.services.web_series_ingest --pages 3
+  ```
+
 - **TVMaze backfill** (keyless — no API key required): scans the public TVMaze index and adds quality shows.
   Shows need a name and an image to be included; the `--max-new` cap bounds each run.
 
@@ -246,6 +287,10 @@ After growing the catalog, rebuild the recommendation model (above) so newly add
 - Export watchlist functionality
 
 ---
+
+## Attribution
+
+This product uses the TMDb API but is not endorsed or certified by TMDb.
 
 ## License
 

@@ -20,7 +20,7 @@ from dotenv import load_dotenv
 # ---------------------------------------------------------------------------
 # Load environment variables from a .env file located at the project root.
 # If no .env file exists, this is a no-op and real environment variables
-# (e.g. set by the OS, Docker, or a CI/CD pipeline) are used instead.
+# (e.g. set by the OS or a CI/CD pipeline) are used instead.
 # ---------------------------------------------------------------------------
 PROJECT_ROOT: Path = Path(__file__).resolve().parent
 ENV_FILE_PATH: Path = PROJECT_ROOT / ".env"
@@ -167,6 +167,40 @@ def get_mongodb_database() -> str:
 
 
 # ---------------------------------------------------------------------------
+# Environment / deployment configuration
+# ---------------------------------------------------------------------------
+# "development" (default) or "production". Production mode enables stricter
+# security defaults (required JWT secret, HTTPS-only headers, hidden API docs).
+APP_ENV: str = _get_optional_env("APP_ENV", "development").strip().lower()
+
+
+def is_production() -> bool:
+    """Whether the service is running in a production deployment."""
+    return APP_ENV in {"production", "prod"}
+
+
+def get_allowed_hosts() -> list[str]:
+    """
+    Hostnames accepted by TrustedHostMiddleware.
+
+    Defaults to "*" so local/dev deployments work out of the box. In
+    production ALLOWED_HOSTS is mandatory: set it to a comma-separated list
+    (e.g. "bingefinder.app,www.bingefinder.app") to prevent Host-header
+    attacks. Failing fast is safer than silently trusting every host.
+    """
+    raw = os.getenv("ALLOWED_HOSTS", "").strip()
+    if raw:
+        return [host.strip() for host in raw.split(",") if host.strip()]
+    if is_production():
+        raise ConfigError(
+            "ALLOWED_HOSTS must be set in production. "
+            "Use a comma-separated list of hostnames, e.g. "
+            "\"bingefinder.app,www.bingefinder.app\"."
+        )
+    return ["*"]
+
+
+# ---------------------------------------------------------------------------
 # Logging configuration
 # ---------------------------------------------------------------------------
 LOG_LEVEL: str = _get_optional_env("LOG_LEVEL", "INFO")
@@ -176,22 +210,30 @@ LOG_LEVEL: str = _get_optional_env("LOG_LEVEL", "INFO")
 # ---------------------------------------------------------------------------
 import secrets as _secrets
 
+_DEV_JWT_SECRET: str | None = None
+
 
 def get_jwt_secret() -> str:
     """
     Retrieve the secret key used for session tokens.
 
-    Returns:
-        The JWT secret as a string. If JWT_SECRET is not set, a random
-        secret is generated (suitable for development only — set a
-        stable secret in production to avoid invalidating sessions on
-        restart).
+    In production a stable JWT_SECRET is mandatory: failing fast is safer
+    than silently signing sessions with a throwaway key. In development a
+    random secret is generated once per process so tokens remain valid for
+    the lifetime of the dev server.
     """
     value = os.getenv("JWT_SECRET")
     if value:
         return value
-    # Dev fallback: random per process (sessions won't survive restart)
-    return _secrets.token_hex(32)
+    if is_production():
+        raise ConfigError(
+            "JWT_SECRET must be set in production. "
+            "Generate one with: python -c \"import secrets; print(secrets.token_hex(32))\""
+        )
+    global _DEV_JWT_SECRET
+    if _DEV_JWT_SECRET is None:
+        _DEV_JWT_SECRET = _secrets.token_hex(32)
+    return _DEV_JWT_SECRET
 
 
 def get_bcrypt_rounds() -> int:

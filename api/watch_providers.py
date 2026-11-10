@@ -106,7 +106,7 @@ def _find_tmdb_id_from_imdb(
                 return int(tmdb_id)
         logger.debug("No TMDb match found for IMDB ID %s", imdb_id)
         return None
-    except (TMDbAPIError, (TypeError, ValueError)) as exc:
+    except (TMDbAPIError, TypeError, ValueError) as exc:
         logger.warning("Failed to resolve TMDb ID from IMDB %s: %s", imdb_id, exc)
         return None
 
@@ -193,7 +193,7 @@ def _find_tmdb_id_from_title(
 
         return None
 
-    except (TMDbAPIError, (TypeError, ValueError)) as exc:
+    except (TMDbAPIError, TypeError, ValueError) as exc:
         logger.warning("Failed to search TMDb for '%s': %s", series_name, exc)
         return None
 

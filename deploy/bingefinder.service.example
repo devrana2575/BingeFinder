@@ -1,0 +1,36 @@
+[Unit]
+Description=BingeFinder API
+Documentation=https://github.com/your-org/bingefinder
+After=network-online.target mongod.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=bingefinder
+Group=bingefinder
+WorkingDirectory=/opt/bingefinder
+EnvironmentFile=/opt/bingefinder/.env
+Environment=PYTHONUNBUFFERED=1
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/bingefinder/.venv/bin/uvicorn backend.main:app \
+    --host 127.0.0.1 \
+    --port 8000 \
+    --workers 2 \
+    --proxy-headers \
+    --forwarded-allow-ips=127.0.0.1
+Restart=on-failure
+RestartSec=3
+TimeoutStopSec=30
+KillSignal=SIGINT
+StandardOutput=journal
+StandardError=journal
+
+# Hardening. The app only writes the recommendation model at runtime.
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=true
+ReadWritePaths=/opt/bingefinder/recommender/artifacts
+
+[Install]
+WantedBy=multi-user.target

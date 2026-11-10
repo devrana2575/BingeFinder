@@ -54,14 +54,14 @@ def _make_bundle():
         }
 
     return {
-        "series_ids": [1, 2, 3, 4],
+        "series_ids": [1001, 1002, 1003, 1004],
         "tfidf_matrix": tfidf_matrix,
         "semantic_embeddings": semantic_embeddings,
         "metadata": {
-            1: _meta("Alpha Drama", ["Drama"]),
-            2: _meta("Beta Comedy", ["Comedy"]),
-            3: _meta("Gamma Crime", ["Crime"]),
-            4: _meta("Omega SciFi", ["Science-Fiction"]),
+            1001: _meta("Alpha Drama", ["Drama"]),
+            1002: _meta("Beta Comedy", ["Comedy"]),
+            1003: _meta("Gamma Crime", ["Crime"]),
+            1004: _meta("Omega SciFi", ["Science-Fiction"]),
         },
     }
 
@@ -110,7 +110,7 @@ def test_genre_preferences_rank_taste_aligned_title_first(
         seeded_mongo_manager,
         "Pref User", "pref@example.com", "password123",
         prefs={"genres": ["Drama"]},
-        reacted_series=4,
+        reacted_series=1004,
     )
     captured = _capture_hybrid(monkeypatch, _synthetic_model)
 
@@ -118,7 +118,7 @@ def test_genre_preferences_rank_taste_aligned_title_first(
 
     assert err is None
     assert len(recs) > 0
-    assert recs[0]["series_id"] == 1  # Alpha Drama first thanks to the genre blend
+    assert recs[0]["series_id"] == 1001  # Alpha Drama first thanks to the genre blend
 
     rows = captured["candidate_rows"]
     assert list(rows) == [0, 1, 2]
@@ -138,7 +138,7 @@ def test_no_preferences_leaves_genre_signal_neutral(
         seeded_mongo_manager,
         "Blank User", "blank@example.com", "password456",
         prefs=None,
-        reacted_series=4,
+        reacted_series=1004,
     )
     captured = _capture_hybrid(monkeypatch, _synthetic_model)
 

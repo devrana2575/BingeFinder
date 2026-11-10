@@ -1,4 +1,5 @@
 const API_BASE = '/api';
+const REQUEST_TIMEOUT_MS = 20000;
 
 // BingeFinder ships web series + anime only. The catalog snapshot still holds
 // legacy movie rows, so they are dropped at the API boundary instead of being
@@ -16,7 +17,7 @@ function withoutMovies(payload) {
 
 async function request(path, options = {}) {
   const token = localStorage.getItem('bf_token');
-  const headers = { ...options.headers };
+  const headers = { Accept: 'application/json', ...options.headers };
 
   const hasBody = options.body != null;
   if (hasBody && !headers['Content-Type']) {
@@ -26,7 +27,26 @@ async function request(path, options = {}) {
     headers['Authorization'] = `Bearer ${token}`;
   }
 
-  const res = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  // Never let a stuck request hang the UI forever. A 20s ceiling is generous
+  // for the slowest provider lookup but still surfaces real failures.
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  let res;
+  try {
+    res = await fetch(`${API_BASE}${path}`, {
+      ...options,
+      headers,
+      signal: options.signal || controller.signal,
+    });
+  } catch (err) {
+    if (err?.name === 'AbortError') {
+      throw new Error('The request timed out. Please try again.');
+    }
+    throw new Error('Network error. Check your connection and try again.');
+  } finally {
+    clearTimeout(timeoutId);
+  }
 
   // A 401 during an authenticated request means a stale/expired session.
   // Skip the redirect for the auth endpoints themselves (a failed login with

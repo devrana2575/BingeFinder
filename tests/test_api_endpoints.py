@@ -16,8 +16,21 @@ Covers:
 
 import pytest
 
+from recommender.exceptions import ModelNotBuiltError
 from recommender.recommend import get_recommendations, load_model
 from backend.services.explain import build_why_reasons
+
+# These tests exercise the real catalog artifact (specific TMDb ids). In a bare
+# CI checkout the artifact is not present, so skip rather than fail; the
+# model-building suites (test_recommender, test_ranking_quality) still run and
+# cover the engine itself.
+try:
+    load_model()
+except ModelNotBuiltError:
+    pytest.skip(
+        "recommendation_model.joblib not built; run `python -m recommender.build_model`",
+        allow_module_level=True,
+    )
 
 
 class TestRecommendationEndpoint:

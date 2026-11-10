@@ -505,4 +505,14 @@ def get_recommendations(
         if len(recommendations) >= top_n:
             break
 
+    # The catalog can contain duplicate TMDb/TVmaze rows for the same title
+    # under different ids. Excluding only the source id would still recommend
+    # the show to itself, so drop any exact title match as well.
+    source_title = (metadata.get(series_ids[target_row], {}).get("title") or "").strip().casefold()
+    if source_title:
+        recommendations = [
+            rec for rec in recommendations
+            if (rec.get("title") or "").strip().casefold() != source_title
+        ]
+
     return recommendations

@@ -1,0 +1,15 @@
+# Caddy reverse proxy for BingeFinder.
+# Replace the domain and TLS email, then:
+#   sudo cp deploy/Caddyfile.example /etc/caddy/Caddyfile
+#   sudo systemctl reload caddy
+#
+# Caddy obtains and renews the TLS certificate automatically.
+
+{
+    email admin@example.com
+}
+
+bingefinder.example.com {
+    encode gzip zstd
+    reverse_proxy 127.0.0.1:8000
+}

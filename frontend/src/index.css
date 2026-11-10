@@ -20,12 +20,27 @@
   --font-body: "Inter", sans-serif;
 }
 
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
 body {
   background-color: var(--color-bg);
   color: var(--color-text);
   font-family: var(--font-body);
+  min-height: 100dvh;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background: var(--color-accent);
+  color: var(--color-bg);
+}
+
+button,
+a {
+  -webkit-tap-highlight-color: transparent;
 }
 
 /* Native form controls: force the dark theme everywhere. The browser/OS

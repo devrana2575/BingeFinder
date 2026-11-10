@@ -1,6 +1,7 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { Suspense, useState, useEffect, useCallback, useRef } from 'react';
 import { Link, Outlet, useLocation } from 'react-router-dom';
 import Sidebar from './Sidebar';
+import PageLoader from './PageLoader';
 import { useAuth } from '../context/AuthContext';
 
 export default function Layout() {
@@ -70,8 +71,19 @@ export default function Layout() {
                 </div>
               </div>
             ) : (
-              <div className="fade-in"><Outlet /></div>
+              <div className="fade-in">
+                <Suspense fallback={<PageLoader />}>
+                  <Outlet />
+                </Suspense>
+              </div>
             )}
+
+            <footer className="mt-12 pt-6 pb-2 border-t border-border text-[11px] leading-relaxed text-text-muted flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+              <p>© {new Date().getFullYear()} BingeFinder. All rights reserved.</p>
+              <p>
+                This product uses the TMDb API but is not endorsed or certified by TMDb.
+              </p>
+            </footer>
           </div>
         </div>
       </main>

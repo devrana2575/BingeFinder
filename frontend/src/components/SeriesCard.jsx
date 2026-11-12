@@ -1,6 +1,8 @@
 import { Link } from 'react-router-dom';
 import PosterImage from './PosterImage';
+import { useRegion } from '../context/RegionContext';
 import { t } from '../i18n';
+import { getJustwatchSearchUrl } from '../utils/justwatch';
 
 const TYPE_LABELS = {
   tv_series: 'card.typeSeries',
@@ -24,6 +26,7 @@ export default function SeriesCard({
   onRemove,
   removeLabel,
 }) {
+  const { region } = useRegion();
   const id = series.series_id;
   // Recommendation endpoints return `title`; catalog/search/discovery return
   // `name`. Never render a placeholder like "Untitled" when a title exists
@@ -90,6 +93,24 @@ export default function SeriesCard({
         <p className="text-[11px] text-text-muted mt-0.5 truncate">
           {typeLabel}{year ? ` · ${year}` : ''}
         </p>
+        {showFreeHint && freeNames.length > 0 && (
+          <p
+            className="text-[10px] font-medium text-free mt-0.5 truncate"
+            title={freeNames.join(', ')}
+          >
+            {t('card.freeOn', { names: freeNames.slice(0, 2).join(', ') })}
+          </p>
+        )}
+        <a
+          href={getJustwatchSearchUrl(title, region)}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={(e) => e.stopPropagation()}
+          title={t('card.findFreeHint', { region: (region || 'US').toUpperCase() })}
+          className="inline-block text-[10px] font-semibold text-free hover:underline mt-0.5"
+        >
+          {t('card.findFree')}
+        </a>
       </div>
     </article>
   );

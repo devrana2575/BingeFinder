@@ -26,6 +26,8 @@ const LikedPage = lazy(() => import('./pages/LikedPage'));
 const RecentlyViewedPage = lazy(() => import('./pages/RecentlyViewedPage'));
 const ForYouPage = lazy(() => import('./pages/ForYouPage'));
 const VibesFilterPage = lazy(() => import('./pages/VibesFilterPage'));
+const FreePage = lazy(() => import('./pages/FreePage'));
+const SettingsPage = lazy(() => import('./pages/SettingsPage'));
 const NotFoundPage = lazy(() => import('./pages/NotFoundPage'));
 
 export default function App() {
@@ -45,6 +47,7 @@ export default function App() {
                       <Route path="discover/vibes/:key" element={<VibesFilterPage />} />
                       <Route path="series" element={<SeriesPage />} />
                       <Route path="anime" element={<AnimePage />} />
+                      <Route path="free" element={<FreePage />} />
                       <Route path="surprise" element={<SurprisePage />} />
                       <Route path="series/:id" element={<SeriesDetailPage />} />
                       <Route path="watchlist" element={<WatchlistPage />} />
@@ -52,6 +55,7 @@ export default function App() {
                       <Route path="recently-viewed" element={<RecentlyViewedPage />} />
                       <Route path="for-you" element={<ForYouPage />} />
                       <Route path="onboarding" element={<OnboardingPage />} />
+                      <Route path="settings" element={<SettingsPage />} />
                     </Route>
                   </Route>
 

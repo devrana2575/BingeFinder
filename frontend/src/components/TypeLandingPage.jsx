@@ -168,6 +168,7 @@ export default function TypeLandingPage({ type }) {
               title={t('home.freeTonight')}
               subtitle={t('home.freeTonightSub')}
               series={freeTonight}
+              linkTo={`/free?type=${type}`}
               showFreeHint
             />
           )}

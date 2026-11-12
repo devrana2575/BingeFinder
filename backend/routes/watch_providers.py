@@ -60,13 +60,18 @@ def watch_providers(series_id: int, region: Optional[str] = None):
         region=effective_region,
     )
 
-    justwatch_url = provider_service.get_justwatch_url(
-        doc.get("name") or "", region=effective_region,
-    )
-
     tmdb_missing = providers_data.get("error") == "tmdb_key_missing"
     lookup_failed = providers_data.get("error") == "provider_lookup_failed"
     effective_region = providers_data.get("region") or effective_region
+
+    justwatch_url = provider_service.get_justwatch_url(
+        doc.get("name") or "", region=effective_region,
+    )
+    # Always-valid fallback: every title gets a region-scoped search link even
+    # when the structured provider lookup is empty, failed, or unconfigured.
+    free_search_url = provider_service.get_justwatch_search_url(
+        doc.get("name") or "", region=effective_region,
+    )
 
     # Clean state machine for the frontend: distinguish "not configured",
     # "request failed" and "succeeded (with/without providers)".
@@ -137,6 +142,7 @@ def watch_providers(series_id: int, region: Optional[str] = None):
         series_id=series_id,
         providers=providers_dict,
         justwatch_url=justwatch_url,
+        free_search_url=free_search_url,
         watch_now_url=watch_now_url,
         region=effective_region,
         free_count=free_count,

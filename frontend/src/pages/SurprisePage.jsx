@@ -13,8 +13,7 @@ import ErrorState from '../components/ErrorState';
 export default function SurprisePage() {
   const { region } = useRegion();
   const [series, setSeries] = useState(null);
-  const [providers, setProviders] = useState(null);
-  const [providersStatus, setProvidersStatus] = useState(null);
+  const [providerData, setProviderData] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -22,20 +21,14 @@ export default function SurprisePage() {
     setLoading(true);
     setError(null);
     setSeries(null);
-    setProviders(null);
-    setProvidersStatus(null);
+    setProviderData(null);
     api.surprise()
       .then(d => {
         setSeries(d);
         return api.watchProviders(d.series_id, region).catch(() => null);
       })
       .then(p => {
-        if (p) {
-          setProviders(p.providers);
-          setProvidersStatus(p.status);
-        } else {
-          setProvidersStatus('error');
-        }
+        setProviderData(p || { status: 'error' });
       })
       .catch(e => setError(e.message))
       .finally(() => setLoading(false));
@@ -111,12 +104,14 @@ export default function SurprisePage() {
           )}
 
           <ProviderSection
-            providers={providers}
-            justwatchUrl={null}
-            watchNowUrl={null}
-            region={region}
+            providers={providerData?.providers}
+            title={series.name}
+            justwatchUrl={providerData?.justwatch_url}
+            freeSearchUrl={providerData?.free_search_url}
+            watchNowUrl={providerData?.watch_now_url}
+            region={providerData?.region || region}
             seriesId={series.series_id}
-            status={providersStatus}
+            status={providerData?.status}
           />
 
           <div className="flex gap-3 justify-center mt-4">

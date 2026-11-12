@@ -121,10 +121,11 @@ export const api = {
     const qs = contentType ? `?content_type=${encodeURIComponent(contentType)}` : '';
     return request(`/discover/hidden-gems${qs}`).then(withoutMovies);
   },
-  freeTonight: (region, contentType) => {
+  freeTonight: (region, contentType, limit) => {
     const params = new URLSearchParams();
     if (region) params.set('region', region);
     if (contentType) params.set('content_type', contentType);
+    if (limit) params.set('limit', limit);
     const qs = params.toString();
     return request(`/discover/free-tonight${qs ? `?${qs}` : ''}`).then(withoutMovies);
   },

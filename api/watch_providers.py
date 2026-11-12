@@ -19,6 +19,7 @@ fallback when no structured data is available.
 import re
 import unicodedata
 from typing import Any, Dict, Optional
+from urllib.parse import quote_plus
 
 from api.tmdb import TMDbAPIError, TMDbClient
 from config import ConfigError
@@ -300,14 +301,25 @@ def get_watch_providers_for_series(
 
     effective_region = normalize_region(region or DEFAULT_REGION)
 
+    # TMDb's region payload usually carries a ready-made availability link.
+    # Prefer it because it is scoped to the resolved title + region; fall back
+    # to the canonical watch page derived from the resolved TMDb id.
+    watch_now_url = (
+        providers_raw.get("link")
+        or f"https://www.themoviedb.org/tv/{tmdb_id}/watch?locale={effective_region}"
+    )
+
     result: Dict[str, Any] = {
         "region": effective_region,
         "providers": providers,
         # TMDB availability page for this series in the requested region.
         "link": link,
-        # Canonical TMDB "where to watch" page. Both derived from the resolved
-        # TMDb id (real URLs, never hand-assembled or fabricated data).
-        "watch_now_url": f"https://www.themoviedb.org/tv/{tmdb_id}/watch?locale={effective_region}",
+        # Real, title-scoped "where to watch" page. Never fabricated.
+        "watch_now_url": watch_now_url,
+        # Always-valid search fallback for checking free availability.
+        "free_search_url": get_justwatch_search_url(
+            series_name or "", region=effective_region
+        ),
         "tmdb_id": tmdb_id,
     }
     return result
@@ -355,14 +367,33 @@ def get_available_providers(region: Optional[str] = None) -> List[Dict[str, Any]
 
 def get_provider_page_url(series_name: str, region: Optional[str] = None) -> Optional[str]:
     """
-    Build a JustWatch search URL as a fallback for manual browsing.
+    Build a JustWatch title-page URL as a fallback for manual browsing.
 
     Uses the target region path so the availability page reflects the
-    region we resolve providers against.
+    region we resolve providers against. Returns None when the title cannot
+    be turned into a usable slug (e.g. a fully non-Latin title); callers can
+    then use :func:`get_justwatch_search_url`, which always works.
     """
     name = (series_name or "").strip()
     if not name:
         return None
     slug = _slugify(name)
+    if not slug:
+        return None
     region_code = normalize_region(region or DEFAULT_REGION).lower()
     return f"https://www.justwatch.com/{region_code}/tv-show/{slug}"
+
+
+def get_justwatch_search_url(series_name: str, region: Optional[str] = None) -> Optional[str]:
+    """
+    Build a region-scoped JustWatch search URL for a title.
+
+    Unlike the title-page URL this always resolves to a working JustWatch
+    page, even when the title's slug is ambiguous or its JustWatch title page
+    does not exist. It is the honest "find it free" fallback for every title.
+    """
+    name = (series_name or "").strip()
+    if not name:
+        return None
+    region_code = normalize_region(region or DEFAULT_REGION).lower()
+    return f"https://www.justwatch.com/{region_code}/search?q={quote_plus(name)}"

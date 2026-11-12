@@ -26,6 +26,10 @@ class WatchProviderResponse(BaseModel):
     series_id: int
     providers: Dict[str, List[ProviderItem]]
     justwatch_url: Optional[str] = None
+    # Always-valid, region-scoped JustWatch search for this title. Present
+    # even when TMDb has no provider data, so every title has a real way to
+    # check free availability.
+    free_search_url: Optional[str] = None
     watch_now_url: Optional[str] = None
     region: Optional[str] = None
     free_count: int = 0

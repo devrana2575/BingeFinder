@@ -12,6 +12,7 @@ import SeriesGrid from '../components/SeriesGrid';
 import ProviderSection from '../components/ProviderSection';
 import { SkeletonText } from '../components/Skeletons';
 import ErrorState from '../components/ErrorState';
+import { getJustwatchSearchUrl } from '../utils/justwatch';
 
 export default function SeriesDetailPage() {
   const { id } = useParams();
@@ -46,7 +47,9 @@ export default function SeriesDetailPage() {
       .then(([s, r, p]) => {
         setSeries(s);
         setRecs(r);
-        setProviders(p);
+        // A failed provider request must render the honest fallback state, not
+        // a permanent loading state.
+        setProviders(p || { status: 'error' });
         if (s?.series_id) {
           api.recordView(s.series_id).catch(() => {});
           api.recordEvent({ series_id: s.series_id, event_type: 'view_details' }).catch(() => {});
@@ -136,6 +139,10 @@ export default function SeriesDetailPage() {
   if (error) return <ErrorState message={error} onRetry={load} />;
   if (!series) return <ErrorState message={t('detail.seriesNotFound')} />;
 
+  const freeSearchHref = providers?.free_search_url
+    || providers?.justwatch_url
+    || getJustwatchSearchUrl(series.name, region);
+
   return (
     <div>
       <div className="flex flex-col sm:flex-row gap-6 mb-8">
@@ -207,6 +214,19 @@ export default function SeriesDetailPage() {
             >
               &#215; {reaction === 'dislike' ? t('detail.notForMeActive') : t('detail.notForMe')}
             </button>
+            {freeSearchHref && (
+              <a
+                href={freeSearchHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => {
+                  api.recordEvent({ series_id: series.series_id, event_type: 'provider_click' }).catch(() => {});
+                }}
+                className="btn-ghost"
+              >
+                {t('detail.findFree')}
+              </a>
+            )}
           </div>
 
           {reaction === 'dislike' && (
@@ -236,7 +256,16 @@ export default function SeriesDetailPage() {
         </section>
       )}
 
-      <ProviderSection providers={providers?.providers} justwatchUrl={providers?.justwatch_url} watchNowUrl={providers?.watch_now_url} region={providers?.region} seriesId={series?.series_id} status={providers?.status} />
+      <ProviderSection
+        providers={providers?.providers}
+        title={series.name}
+        justwatchUrl={providers?.justwatch_url}
+        freeSearchUrl={providers?.free_search_url}
+        watchNowUrl={providers?.watch_now_url}
+        region={providers?.region}
+        seriesId={series?.series_id}
+        status={providers?.status}
+      />
 
       {recs?.recommendations?.length > 0 && (
         <section className="mb-8">

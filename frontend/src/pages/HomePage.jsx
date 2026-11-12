@@ -103,7 +103,7 @@ export default function HomePage() {
     api.hiddenGems()
       .then(setGems)
       .catch(e => { console.error(e); setGems([]); });
-    api.freeTonight(region)
+    api.freeTonight(region, 'tv_series')
       .then(setFreeTonight)
       .catch(e => { console.error(e); setFreeTonight([]); });
     api.newNoteworthy()
@@ -239,10 +239,10 @@ export default function HomePage() {
 
       {freeTonight?.length > 0 && (
         <PosterRail
-          title={t('home.freeTonight')}
-          subtitle={t('home.freeTonightSub')}
+          title={t('home.freeWebSeries')}
+          subtitle={t('home.freeWebSeriesSub')}
           series={freeTonight}
-          linkTo="/discover"
+          linkTo="/free?type=tv_series"
           showFreeHint
         />
       )}

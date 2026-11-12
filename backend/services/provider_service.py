@@ -87,3 +87,12 @@ def get_justwatch_url(series_name: str, region: Optional[str] = None) -> Optiona
         return get_provider_page_url(series_name, region=region)
     except Exception:
         return None
+
+
+def get_justwatch_search_url(series_name: str, region: Optional[str] = None) -> Optional[str]:
+    """Get an always-valid JustWatch search URL for a title + region."""
+    try:
+        from api.watch_providers import get_justwatch_search_url as _search_url
+        return _search_url(series_name, region=region)
+    except Exception:
+        return None

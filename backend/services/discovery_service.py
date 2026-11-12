@@ -221,11 +221,15 @@ def get_free_to_watch(docs: List[Dict], limit: int = 6, region: Optional[str] = 
         ),
         reverse=True,
     )
-    pool = ordered[:80]
-    sample_size = min(24, len(pool))
+    # A dedicated Free page asks for a larger list than the homepage rail, so
+    # widen the deterministic sample only when more results are requested.
+    # The route-level cache still makes repeat visits cheap.
+    pool = ordered[:120]
+    sample_size = min(max(24, limit * 2), len(pool))
     sampled = random.Random(0).sample(pool, sample_size) if sample_size > 0 else []
 
     free_series = []
+    seen_names = set()
 
     def _lookup(doc: Dict) -> Optional[Dict]:
         return _cached_watch_providers(
@@ -263,6 +267,11 @@ def get_free_to_watch(docs: List[Dict], limit: int = 6, region: Optional[str] = 
             free = providers.get("free") or []
             ads = providers.get("ads") or []
             if free or ads:
+                name_key = str(doc.get("name") or "").strip().lower()
+                if name_key and name_key in seen_names:
+                    continue
+                if name_key:
+                    seen_names.add(name_key)
                 entry = dict(doc)
                 # Store clean product-level fields: a nominal tier (highest
                 # priority free type present) plus the platform names.

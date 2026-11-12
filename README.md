@@ -12,6 +12,8 @@ A data-science-powered web-series discovery and recommendation platform that hel
 - **Personalized Recommendations** — Weighted preference vector from **Like / Love / Not For Me** reactions, watchlist, and recently-viewed history, reranked with an adaptive LinUCB contextual bandit
 - **"Why This?" Explanations** — Every recommendation comes with a plain-language reason based on overlapping metadata
 - **Where to Watch** — Streaming provider availability via TMDb (Netflix, Prime, etc.) with legitimate "Watch Now" links
+- **Free to Watch** — Region-aware free and free-with-ads picks for web series and anime, with provider names on every card
+- **Settings** — Account view, region selector, content-type, language, genre, and service preferences
 - **Watchlist** — Save and manage your personal watchlist (persisted in MongoDB)
 - **Like / Love / Not For Me** — Tell us exactly how you feel. NOT FOR ME actively suppresses rejected titles (and similar ones) from your recommendations
 - **Surprise Me** — One-click random series pick from the catalog

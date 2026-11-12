@@ -70,3 +70,15 @@ def test_authenticate_returns_preferences(seeded_mongo_manager):
     )
     user = um.authenticate_user("dave@example.com", "passwordabc")
     assert user["preferences"]["region"] == "JP"
+
+
+def test_settings_supports_liked_types_and_partial_payloads():
+    from backend.schemas.settings import UserSettings
+
+    payload = UserSettings(liked_types=["tv_series", "anime", "movie", "ANIME"])
+    assert payload.liked_types == ["tv_series", "anime"]
+
+    # A partial settings update must not send defaults for fields the caller
+    # did not provide (changing region used to wipe languages/genres).
+    partial = UserSettings(region="IN")
+    assert partial.model_dump(exclude_unset=True) == {"region": "IN"}

@@ -28,6 +28,8 @@ PREFERRED_GENRES = [
 MAX_LANGUAGES = 5
 MAX_GENRES = 8
 MAX_SERVICES = 15
+MAX_LIKED_TYPES = 2
+SUPPORTED_TYPES = {"tv_series", "anime"}
 
 
 class UserSettings(BaseModel):
@@ -37,6 +39,7 @@ class UserSettings(BaseModel):
     languages: List[str] = Field(default_factory=list, max_length=MAX_LANGUAGES)
     genres: List[str] = Field(default_factory=list, max_length=MAX_GENRES)
     services: List[int] = Field(default_factory=list, max_length=MAX_SERVICES)
+    liked_types: List[str] = Field(default_factory=list)
 
     @field_validator("region")
     @classmethod
@@ -89,3 +92,16 @@ class UserSettings(BaseModel):
             seen.add(val)
             cleaned.append(val)
         return cleaned[:MAX_SERVICES]
+
+    @field_validator("liked_types")
+    @classmethod
+    def _clean_liked_types(cls, values: List[str]) -> List[str]:
+        seen = set()
+        cleaned: List[str] = []
+        for v in values or []:
+            key = str(v).strip().lower()
+            if key not in SUPPORTED_TYPES or key in seen:
+                continue
+            seen.add(key)
+            cleaned.append(key)
+        return cleaned[:MAX_LIKED_TYPES]

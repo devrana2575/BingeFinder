@@ -157,7 +157,10 @@ def get_settings(user_id: str = Depends(require_auth)):
 def update_settings(
     payload: UserSettings, user_id: str = Depends(require_auth)
 ):
-    ok, err = user_service.update_settings(user_id, payload.model_dump())
+    # ``exclude_unset`` keeps a partial update (for example, changing region
+    # from the header) from silently wiping languages/genres/services.
+    updates = payload.model_dump(exclude_unset=True)
+    ok, err = user_service.update_settings(user_id, updates)
     if err:
         raise HTTPException(status_code=503, detail=err)
-    return {"status": "saved", "settings": payload.model_dump()}
+    return {"status": "saved", "settings": updates}

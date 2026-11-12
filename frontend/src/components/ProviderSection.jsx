@@ -1,10 +1,19 @@
 import { useState } from 'react';
 import { t } from '../i18n';
 import { api } from '../api/client';
+import { getJustwatchSearchUrl } from '../utils/justwatch';
 
-function ProviderCard({ platform, action, watchNowUrl, justwatchUrl, seriesId }) {
+function recordProviderClick(seriesId) {
+  if (seriesId) {
+    api.recordEvent({ series_id: seriesId, event_type: 'provider_click' }).catch(() => {});
+  }
+}
+
+function ProviderCard({ platform, action, watchNowUrl, justwatchUrl, seriesId, linkLabel }) {
   const href = platform.watch_url || watchNowUrl || justwatchUrl;
-  const label = platform.watch_url || watchNowUrl ? t('detail.watchNow') : t('detail.viewAvailability');
+  const label = linkLabel || (platform.watch_url || watchNowUrl
+    ? t('detail.watchNow')
+    : t('detail.viewAvailability'));
   return (
     <div className="flex items-center gap-3 p-3 rounded-lg bg-surface-2 border border-border">
       {platform.logo_url ? (
@@ -30,9 +39,7 @@ function ProviderCard({ platform, action, watchNowUrl, justwatchUrl, seriesId })
           href={href}
           target="_blank"
           rel="noopener noreferrer"
-          onClick={() => {
-            if (seriesId) api.recordEvent({ series_id: seriesId, event_type: 'provider_click' }).catch(() => {});
-          }}
+          onClick={() => recordProviderClick(seriesId)}
           className="flex-shrink-0 text-xs font-semibold text-accent hover:underline whitespace-nowrap"
         >
           {label}
@@ -50,7 +57,66 @@ function SectionLabel({ children }) {
   );
 }
 
-export default function ProviderSection({ providers, justwatchUrl, watchNowUrl, region, seriesId, status }) {
+function FreeSearchLinks({ freeSearchUrl, watchNowUrl, regionLabel, seriesId }) {
+  if (!freeSearchUrl && !watchNowUrl) return null;
+
+  return (
+    <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
+      {freeSearchUrl && (
+        <a
+          href={freeSearchUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={() => recordProviderClick(seriesId)}
+          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-bg bg-free hover:opacity-90 transition-opacity"
+        >
+          {t('detail.findFreeOnJustwatch', { region: regionLabel })}
+        </a>
+      )}
+      {watchNowUrl && (
+        <a
+          href={watchNowUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={() => recordProviderClick(seriesId)}
+          className="text-xs font-semibold text-accent hover:underline"
+        >
+          {t('detail.checkAllOptions')}
+        </a>
+      )}
+    </div>
+  );
+}
+
+function FallbackSection({ message, freeSearchUrl, watchNowUrl, regionLabel, seriesId }) {
+  return (
+    <section id="where-to-watch" className="rounded-xl border border-border bg-surface p-5 mb-8">
+      <div className="flex items-baseline justify-between mb-3">
+        <h2 className="text-base font-semibold text-text">{t('detail.watchProviderTitle')}</h2>
+        <span className="text-xs text-text-muted">{regionLabel}</span>
+      </div>
+      <p className="text-sm text-text-muted mb-4">{message}</p>
+      <FreeSearchLinks
+        freeSearchUrl={freeSearchUrl}
+        watchNowUrl={watchNowUrl}
+        regionLabel={regionLabel}
+        seriesId={seriesId}
+      />
+      <p className="text-xs text-text-muted mt-3">{t('detail.justwatchHint')}</p>
+    </section>
+  );
+}
+
+export default function ProviderSection({
+  providers,
+  title,
+  justwatchUrl,
+  freeSearchUrl,
+  watchNowUrl,
+  region,
+  seriesId,
+  status,
+}) {
   const [showPaid, setShowPaid] = useState(false);
 
   const regionLabel = (region || 'US').toUpperCase();
@@ -68,45 +134,40 @@ export default function ProviderSection({ providers, justwatchUrl, watchNowUrl, 
   const emptyResult = status === 'ok' && free.length === 0 && ads.length === 0
     && flatrate.length === 0 && rent.length === 0 && buy.length === 0;
 
-  // Keyless fallback: when structured watch-availability isn't configured or
-  // temporarily fails, still give the user a real, region-aware JustWatch page
-  // to verify where a title is free. Real data, never fabricated — the deep
-  // link is derived from the title + region.
-  const JustWatchFallback = ({ message }) => (
-    <section className="rounded-xl border border-border bg-surface p-5 mb-8">
-      <div className="flex items-baseline justify-between mb-3">
-        <h2 className="text-base font-semibold text-text">{t('detail.watchProviderTitle')}</h2>
-        <span className="text-xs text-text-muted">{regionLabel}</span>
-      </div>
-      <p className="text-sm text-text-muted mb-4">{message}</p>
-      {justwatchUrl && (
-        <a
-          href={justwatchUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={() => {
-            if (seriesId) api.recordEvent({ series_id: seriesId, event_type: 'provider_click' }).catch(() => {});
-          }}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold text-bg bg-free hover:opacity-90 transition-opacity"
-        >
-          {t('detail.justwatchAvailability', { region: regionLabel })}
-        </a>
-      )}
-      <p className="text-xs text-text-muted mt-3">{t('detail.justwatchHint')}</p>
-    </section>
-  );
+  // The search URL is always valid; the title page is a nicer destination when
+  // it exists. If the provider request failed entirely, derive the search link
+  // from the title so the "find it free" path still works.
+  const fallbackUrl = freeSearchUrl
+    || justwatchUrl
+    || getJustwatchSearchUrl(title, region);
 
   if (isNotConfigured) {
-    return <JustWatchFallback message={t('detail.watchProviderNotConfigured')} />;
+    return (
+      <FallbackSection
+        message={t('detail.watchProviderNotConfigured')}
+        freeSearchUrl={fallbackUrl}
+        watchNowUrl={watchNowUrl}
+        regionLabel={regionLabel}
+        seriesId={seriesId}
+      />
+    );
   }
 
   if (isError) {
-    return <JustWatchFallback message={t('detail.watchProviderError')} />;
+    return (
+      <FallbackSection
+        message={t('detail.watchProviderError')}
+        freeSearchUrl={fallbackUrl}
+        watchNowUrl={watchNowUrl}
+        regionLabel={regionLabel}
+        seriesId={seriesId}
+      />
+    );
   }
 
   if (isLoading) {
     return (
-      <section className="rounded-xl border border-border bg-surface p-5 mb-8">
+      <section id="where-to-watch" className="rounded-xl border border-border bg-surface p-5 mb-8">
         <h2 className="text-base font-semibold text-text mb-3">{t('detail.watchProviderTitle')}</h2>
         <p className="text-sm text-text-muted">{t('detail.watchProviderLoading')}</p>
       </section>
@@ -115,20 +176,30 @@ export default function ProviderSection({ providers, justwatchUrl, watchNowUrl, 
 
   if (emptyResult) {
     return (
-      <section className="rounded-xl border border-border bg-surface p-5 mb-8">
-        <h2 className="text-base font-semibold text-text mb-3">{t('detail.watchProviderTitle')}</h2>
-        <p className="text-sm text-text-muted">
-          {t('detail.noOptionsInRegion', { region: regionLabel })}
-        </p>
-      </section>
+      <FallbackSection
+        message={t('detail.noOptionsInRegion', { region: regionLabel })}
+        freeSearchUrl={fallbackUrl}
+        watchNowUrl={watchNowUrl}
+        regionLabel={regionLabel}
+        seriesId={seriesId}
+      />
     );
   }
 
   return (
-    <section className="rounded-xl border border-border bg-surface p-5 mb-8">
+    <section id="where-to-watch" className="rounded-xl border border-border bg-surface p-5 mb-8">
       <div className="flex items-baseline justify-between mb-4">
         <h2 className="text-base font-semibold text-text">{t('detail.watchProviderTitle')}</h2>
         <span className="text-xs text-text-muted">{regionLabel}</span>
+      </div>
+
+      <div className="mb-4">
+        <FreeSearchLinks
+          freeSearchUrl={fallbackUrl}
+          watchNowUrl={watchNowUrl}
+          regionLabel={regionLabel}
+          seriesId={seriesId}
+        />
       </div>
 
       {free.length > 0 && (
@@ -136,7 +207,15 @@ export default function ProviderSection({ providers, justwatchUrl, watchNowUrl, 
           <SectionLabel>{t('detail.free')}</SectionLabel>
           <div className="space-y-2">
             {free.map((p, i) => (
-              <ProviderCard key={`free-${p.provider_name}-${i}`} platform={p} action={t('detail.free')} watchNowUrl={watchNowUrl} justwatchUrl={justwatchUrl} seriesId={seriesId} />
+              <ProviderCard
+                key={`free-${p.provider_name}-${i}`}
+                platform={p}
+                action={t('detail.free')}
+                watchNowUrl={watchNowUrl}
+                justwatchUrl={fallbackUrl}
+                seriesId={seriesId}
+                linkLabel={t('detail.watchFree')}
+              />
             ))}
           </div>
         </div>
@@ -147,7 +226,15 @@ export default function ProviderSection({ providers, justwatchUrl, watchNowUrl, 
           <SectionLabel>{t('detail.freeWithAds')}</SectionLabel>
           <div className="space-y-2">
             {ads.map((p, i) => (
-              <ProviderCard key={`ads-${p.provider_name}-${i}`} platform={p} action={t('detail.freeWithAds')} watchNowUrl={watchNowUrl} justwatchUrl={justwatchUrl} seriesId={seriesId} />
+              <ProviderCard
+                key={`ads-${p.provider_name}-${i}`}
+                platform={p}
+                action={t('detail.freeWithAds')}
+                watchNowUrl={watchNowUrl}
+                justwatchUrl={fallbackUrl}
+                seriesId={seriesId}
+                linkLabel={t('detail.watchFreeWithAds')}
+              />
             ))}
           </div>
         </div>
@@ -175,7 +262,15 @@ export default function ProviderSection({ providers, justwatchUrl, watchNowUrl, 
                   <SectionLabel>{t('detail.subscription')}</SectionLabel>
                   <div className="space-y-2">
                     {flatrate.map((p, i) => (
-                      <ProviderCard key={`sub-${p.provider_name}-${i}`} platform={p} action={t('detail.subscription')} watchNowUrl={watchNowUrl} justwatchUrl={justwatchUrl} seriesId={seriesId} />
+                      <ProviderCard
+                        key={`sub-${p.provider_name}-${i}`}
+                        platform={p}
+                        action={t('detail.subscription')}
+                        watchNowUrl={watchNowUrl}
+                        justwatchUrl={fallbackUrl}
+                        seriesId={seriesId}
+                        linkLabel={t('detail.viewAvailability')}
+                      />
                     ))}
                   </div>
                 </div>
@@ -185,10 +280,26 @@ export default function ProviderSection({ providers, justwatchUrl, watchNowUrl, 
                   <SectionLabel>{t('detail.rentBuy')}</SectionLabel>
                   <div className="space-y-2">
                     {rent.map((p, i) => (
-                      <ProviderCard key={`rent-${p.provider_name}-${i}`} platform={p} action={t('detail.rentBuy')} watchNowUrl={watchNowUrl} justwatchUrl={justwatchUrl} seriesId={seriesId} />
+                      <ProviderCard
+                        key={`rent-${p.provider_name}-${i}`}
+                        platform={p}
+                        action={t('detail.rentBuy')}
+                        watchNowUrl={watchNowUrl}
+                        justwatchUrl={fallbackUrl}
+                        seriesId={seriesId}
+                        linkLabel={t('detail.viewAvailability')}
+                      />
                     ))}
                     {buy.map((p, i) => (
-                      <ProviderCard key={`buy-${p.provider_name}-${i}`} platform={p} action={t('detail.rentBuy')} watchNowUrl={watchNowUrl} justwatchUrl={justwatchUrl} seriesId={seriesId} />
+                      <ProviderCard
+                        key={`buy-${p.provider_name}-${i}`}
+                        platform={p}
+                        action={t('detail.rentBuy')}
+                        watchNowUrl={watchNowUrl}
+                        justwatchUrl={fallbackUrl}
+                        seriesId={seriesId}
+                        linkLabel={t('detail.viewAvailability')}
+                      />
                     ))}
                   </div>
                 </div>

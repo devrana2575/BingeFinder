@@ -5,8 +5,6 @@ import { useRegion } from '../context/RegionContext';
 import { t } from '../i18n';
 import { SkeletonText } from '../components/Skeletons';
 
-const GUEST_PREFS_KEY = 'bf_guest_prefs';
-
 const TYPE_OPTIONS = [
   { value: 'tv_series', label: t('settings.typeSeries') },
   { value: 'anime', label: t('settings.typeAnime') },
@@ -58,8 +56,8 @@ function ChipGroup({ label, hint, options, selected, onToggle, max }) {
 }
 
 export default function SettingsPage() {
-  const { isAuth } = useAuth();
-  const { region } = useRegion();
+  const { user } = useAuth();
+  const { region, regionName, regions, setRegion } = useRegion();
 
   const [loading, setLoading] = useState(true);
   const [languages, setLanguages] = useState([]);
@@ -74,23 +72,22 @@ export default function SettingsPage() {
 
   useEffect(() => {
     let mounted = true;
-    const load = async () => {
-      let prefs = {};
-      if (isAuth) {
-        try { prefs = await api.getSettings(); } catch {}
-      } else {
-        try { prefs = JSON.parse(localStorage.getItem(GUEST_PREFS_KEY) || '{}'); } catch {}
-      }
-      if (!mounted) return;
-      setLanguages(prefs.languages || []);
-      setGenres(prefs.genres || []);
-      setServices(prefs.services || []);
-      setLikedTypes(prefs.liked_types || []);
-      setLoading(false);
-    };
-    load();
+    api.getSettings()
+      .then(prefs => {
+        if (!mounted) return;
+        setLanguages(prefs.languages || []);
+        setGenres(prefs.genres || []);
+        setServices(prefs.services || []);
+        setLikedTypes(prefs.liked_types || []);
+      })
+      .catch(e => {
+        if (mounted) setError(e.message || t('settings.loadError'));
+      })
+      .finally(() => {
+        if (mounted) setLoading(false);
+      });
     return () => { mounted = false; };
-  }, [isAuth]);
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -114,21 +111,15 @@ export default function SettingsPage() {
     setSaving(true);
     setError(null);
     setSaved(false);
-    const payload = { languages, genres, services, liked_types: likedTypes };
-    if (isAuth) {
-      try {
-        await api.updateSettings(payload);
-        setSaved(true);
-      } catch (e) {
-        setError(e.message || t('settings.savedError'));
-      }
-    } else {
-      const guestPrefs = { languages, genres, services, liked_types: likedTypes };
-      localStorage.setItem(GUEST_PREFS_KEY, JSON.stringify(guestPrefs));
+    const payload = { region, languages, genres, services, liked_types: likedTypes };
+    try {
+      await api.updateSettings(payload);
       setSaved(true);
+    } catch (e) {
+      setError(e.message || t('settings.savedError'));
     }
     setSaving(false);
-  }, [isAuth, languages, genres, services, likedTypes]);
+  }, [region, languages, genres, services, likedTypes]);
 
   if (loading) {
     return (
@@ -143,11 +134,31 @@ export default function SettingsPage() {
     <div className="max-w-xl">
       <h1 className="text-xl font-bold text-text mb-1">{t('settings.title')}</h1>
       <p className="text-sm text-text-muted mb-6">{t('settings.subtitle')}</p>
-      {!isAuth && (
-        <p className="text-xs text-text-muted bg-surface border border-border rounded-lg px-3 py-2 mb-4">
-          {t('settings.guestNote')}
+
+      <section className="rounded-xl border border-border bg-surface p-5 mb-4">
+        <h2 className="text-sm font-semibold text-text">{t('settings.account')}</h2>
+        <p className="text-xs text-text-muted mt-2">{t('settings.signedInAs')}</p>
+        <p className="text-sm text-text mt-1">{user?.name}</p>
+        <p className="text-sm text-text-muted">{user?.email}</p>
+      </section>
+
+      <fieldset className="rounded-xl border border-border bg-surface p-5 mb-6">
+        <legend className="px-1 text-sm font-semibold text-text">{t('settings.region')}</legend>
+        <p className="text-xs text-text-muted mt-1">{t('settings.regionHint')}</p>
+        <select
+          value={region || ''}
+          onChange={e => setRegion(e.target.value)}
+          className="mt-3 w-full max-w-xs px-3 py-2 rounded-lg bg-surface-2 border border-border text-sm text-text-secondary focus:border-accent"
+        >
+          {!region && <option value="" disabled>{t('settings.regionSelect')}</option>}
+          {regions.map(r => (
+            <option key={r.code} value={r.code}>{r.name} ({r.code})</option>
+          ))}
+        </select>
+        <p className="text-xs text-text-muted mt-2">
+          {t('settings.currentRegion', { region: regionName })}
         </p>
-      )}
+      </fieldset>
 
       <div className="space-y-4 mb-6">
         <ChipGroup

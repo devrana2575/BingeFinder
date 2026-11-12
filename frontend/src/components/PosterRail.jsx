@@ -1,5 +1,6 @@
 import { Link } from 'react-router-dom';
 import SeriesCard from './SeriesCard';
+import { t } from '../i18n';
 
 /**
  * Horizontally scrollable poster rail — the primary homepage browsing pattern.
@@ -17,7 +18,7 @@ export default function PosterRail({ title, subtitle, series, linkTo, linkText, 
         </div>
         {linkTo && (
           <Link to={linkTo} className="text-xs font-semibold text-accent hover:text-accent-light transition-colors flex-shrink-0">
-            {linkText} →
+            {linkText || t('section.viewAll')} →
           </Link>
         )}
       </div>

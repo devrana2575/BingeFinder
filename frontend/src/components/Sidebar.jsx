@@ -57,6 +57,7 @@ export default function Sidebar({ onNavigate }) {
             {nav('/', t('nav.home'))}
             {nav('/series', t('nav.series'))}
             {nav('/anime', t('nav.anime'))}
+            {nav('/free', t('nav.free'))}
             {nav('/discover', t('nav.discover'))}
           </NavGroup>
 
@@ -81,6 +82,10 @@ export default function Sidebar({ onNavigate }) {
             {nav('/watchlist', t('nav.watchlist'))}
             {nav('/liked', t('nav.liked'))}
             {nav('/recently-viewed', t('nav.recentlyViewed'))}
+          </NavGroup>
+
+          <NavGroup label={t('nav.accountGroup')}>
+            {nav('/settings', t('nav.settings'))}
           </NavGroup>
         </>
       )}

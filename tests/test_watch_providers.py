@@ -22,6 +22,7 @@ import pytest
 from api.watch_providers import (
     MAX_FREE_PROVIDERS,
     MAX_PAID_PROVIDERS,
+    get_justwatch_search_url,
     get_provider_page_url,
 )
 from backend.routes.watch_providers import watch_providers, available_providers
@@ -74,6 +75,28 @@ def test_justwatch_url_is_real_domain():
 
 def test_justwatch_url_empty_name_is_none():
     assert get_provider_page_url("") is None
+
+
+def test_justwatch_title_url_returns_none_for_unslugifiable_title():
+    # A fully non-Latin title has no usable JustWatch path slug; callers must
+    # fall back to the search URL instead of a broken /tv-show/ path.
+    assert get_provider_page_url("東京") is None
+
+
+def test_justwatch_search_url_is_region_scoped_and_encoded():
+    url = get_justwatch_search_url("Breaking Bad", region="IN")
+    assert url == "https://www.justwatch.com/in/search?q=Breaking+Bad"
+
+
+def test_justwatch_search_url_handles_non_latin_titles():
+    url = get_justwatch_search_url("東京", region="JP")
+    assert url is not None
+    assert "/jp/search?q=" in url
+    assert "%E6%9D%B1%E4%BA%AC" in url
+
+
+def test_justwatch_search_url_empty_name_is_none():
+    assert get_justwatch_search_url("") is None
 
 
 # ---------------------------------------------------------------------------
@@ -258,6 +281,47 @@ def test_status_is_ok_with_no_providers(seeded_mongo_manager, monkeypatch):
     assert resp.providers == {}
     # A real "no providers" result is distinct from lookup failure.
     assert resp.tmdb_configured is True
+
+
+def test_route_always_returns_free_search_url(seeded_mongo_manager, monkeypatch):
+    """Every title has a real, region-scoped free-search fallback."""
+    import backend.services.provider_service as ps
+
+    monkeypatch.setattr(
+        ps, "get_watch_providers",
+        lambda *a, **k: {"region": "US", "providers": {}},
+    )
+    resp = watch_providers(1001, region="US")
+    assert resp.free_search_url
+    assert "justwatch.com/us/search" in resp.free_search_url
+    # Encoded title from the seeded series.
+    assert "q=" in resp.free_search_url
+
+
+def test_route_free_search_url_survives_lookup_failure(seeded_mongo_manager, monkeypatch):
+    import backend.services.provider_service as ps
+
+    monkeypatch.setattr(
+        ps, "get_watch_providers",
+        lambda *a, **k: {"error": "provider_lookup_failed"},
+    )
+    resp = watch_providers(1001, region="DE")
+    assert resp.status == "error"
+    assert resp.free_search_url
+    assert "justwatch.com/de/search" in resp.free_search_url
+
+
+def test_route_free_search_url_survives_missing_tmdb_key(seeded_mongo_manager, monkeypatch):
+    import backend.services.provider_service as ps
+
+    monkeypatch.setattr(
+        ps, "get_watch_providers",
+        lambda *a, **k: {"error": "tmdb_key_missing"},
+    )
+    resp = watch_providers(1001, region="GB")
+    assert resp.status == "not_configured"
+    assert resp.free_search_url
+    assert "justwatch.com/gb/search" in resp.free_search_url
 
 
 # ---------------------------------------------------------------------------

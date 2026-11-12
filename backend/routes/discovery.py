@@ -239,15 +239,19 @@ def featured(
 
 
 @router.get("/free-tonight", response_model=List[SeriesSummary])
-def free_tonight(region: Optional[str] = None, content_type: Optional[str] = None):
-    cache_key = ((region or "").upper(), content_type or "")
+def free_tonight(
+    region: Optional[str] = None,
+    content_type: Optional[str] = None,
+    limit: int = Query(6, ge=1, le=24),
+):
+    cache_key = ((region or "").upper(), content_type or "", limit)
     cached = _free_tonight_cache.get(cache_key)
     now = time.time()
     if cached and now - cached[0] < _FREE_TONIGHT_TTL_SECONDS:
         return [_doc_to_summary(d) for d in cached[1]]
 
     docs = _rail(content_type)
-    free = discovery_service.get_free_to_watch(docs, limit=6, region=region)
+    free = discovery_service.get_free_to_watch(docs, limit=limit, region=region)
     if free:
         _free_tonight_cache[cache_key] = (now, free)
     return [_doc_to_summary(d) for d in free]
